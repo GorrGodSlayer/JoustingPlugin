@@ -1,0 +1,23 @@
+# Jousting Plugin Configuration
+
+# Lance item (default: END_ROD)
+lance-item: END_ROD
+
+# Speed tier detection (blocks per second threshold)
+high-tier-speed-threshold: 1.5
+
+# Damage values
+low-tier-max-damage: 3.0
+high-tier-max-damage: 6.0
+
+# Minimum momentum distance (blocks traveled before damage applies)
+minimum-momentum-distance: 5.0
+
+# Knockoff probabilities
+knockoff-chance-zero-momentum: 5
+knockoff-chance-full-momentum: 70
+
+# Sounds (use Minecraft sound keys)
+sounds:
+  hit: "entity.player.attack.strong"
+  knockoff: "entity.item.break"

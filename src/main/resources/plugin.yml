@@ -1,0 +1,16 @@
+name: JoustingPlugin
+version: 1.0.0
+main: com.jousting.JoustingPlugin
+api-version: 1.21
+description: A jousting plugin with lance system, momentum, and knockoff mechanics
+authors:
+  - k4nefr-cmd
+commands:
+  jousting:
+    description: Jousting plugin commands
+    usage: /jousting reload
+    permission: jousting.admin
+permissions:
+  jousting.admin:
+    description: Permission to use jousting admin commands
+    default: op
