@@ -92,3 +92,11 @@ sounds:
 ## Author
 
 k4nefr-cmd
+
+## Forked by 
+
+GorrGodSlayer (AKA Alex)
+
+## Missing 
+
+The fundamentals missing are: Lance tiers, durability and lance breaking, Lance cooldown, shield interaction between a lance and a shield, medium horse tiers, the momentum reset, the momentum visual bar, strength pots/enchants handling, PvP mode cs jousting mode distinctions. To be worked on in the upcoming days
