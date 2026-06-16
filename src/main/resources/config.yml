@@ -1,19 +1,32 @@
 # Jousting Plugin Configuration
 
-# Lance item (default: END_ROD)
-lance-item: END_ROD
+# Lance tiers - each spear material and its flat damage bonus on top of the horse-speed cap
+lance-tiers:
+  IRON_SPEAR:
+    damage-bonus: 0.0
+  GOLDEN_SPEAR:
+    damage-bonus: 1.0
+  DIAMOND_SPEAR:
+    damage-bonus: 2.0
 
-# Speed tier detection (blocks per second threshold)
+# Number of successful hits before a lance breaks
+lance-max-uses: 10
+
+# Speed tier detection (horse movement speed attribute threshold)
 high-tier-speed-threshold: 1.5
 
-# Damage values
+# Base damage caps by horse speed tier (hearts)
 low-tier-max-damage: 3.0
 high-tier-max-damage: 6.0
 
-# Minimum momentum distance (blocks traveled before damage applies)
+# Minimum horse velocity (blocks per tick) required to build momentum
+# Below this threshold momentum resets to zero
+minimum-run-speed: 0.15
+
+# Minimum distance (blocks) the horse must travel before any damage is dealt
 minimum-momentum-distance: 5.0
 
-# Knockoff probabilities
+# Knockoff probabilities (percent) when hitting a mounted player
 knockoff-chance-zero-momentum: 5
 knockoff-chance-full-momentum: 70
 
