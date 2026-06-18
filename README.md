@@ -1,6 +1,6 @@
 # JoustingPlugin
 
-A Minecraft Paper 1.21.8 plugin that adds a complete jousting system with lances, momentum, and knockoff mechanics.
+A Minecraft Paper 1.21.11 plugin that adds a complete jousting system with lances, momentum, and knockoff mechanics.
 
 ## Features
 
