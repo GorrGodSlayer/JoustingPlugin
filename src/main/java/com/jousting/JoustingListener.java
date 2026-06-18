@@ -1,19 +1,18 @@
 package com.jousting;
 
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.entity.Horse;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.vehicle.VehicleExitEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataContainer;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
 
 import java.util.Random;
@@ -21,118 +20,196 @@ import java.util.Random;
 public class JoustingListener implements Listener {
     private final JoustingPlugin plugin;
     private final JoustingConfig config;
+    private final MomentumBarManager barManager;
+    private final CooldownManager cooldowns;
+    private final LanceItems lances;
     private final Random random = new Random();
-    private final NamespacedKey lanceUsesKey;
 
-    public JoustingListener(JoustingPlugin plugin, JoustingConfig config) {
+    public JoustingListener(JoustingPlugin plugin, JoustingConfig config,
+                            MomentumBarManager barManager, CooldownManager cooldowns,
+                            LanceItems lances) {
         this.plugin = plugin;
         this.config = config;
-        this.lanceUsesKey = new NamespacedKey(plugin, "lance_uses");
+        this.barManager = barManager;
+        this.cooldowns = cooldowns;
+        this.lances = lances;
     }
 
-    @EventHandler
-    public void onPlayerMove(PlayerMoveEvent event) {
-        Player player = event.getPlayer();
-        if (!(player.getVehicle() instanceof Horse horse)) {
-            return;
-        }
+    // ---------------------------------------------------------------- movement / momentum
 
-        // If horse is too slow, bleed momentum back to zero and stop tracking
-        double speed = horse.getVelocity().length();
-        if (speed < config.getMinimumRunSpeed()) {
-            MomentumTracker.resetMomentum(player.getUniqueId());
-            return;
-        }
+    // Momentum tracking + the momentum bar are handled by MomentumTask (per-tick poll).
 
-        // Track momentum while riding at speed
-        MomentumTracker.trackLocation(
-            player.getUniqueId(),
-            player.getLocation().getX(),
-            player.getLocation().getY(),
-            player.getLocation().getZ()
-        );
-    }
+    // ---------------------------------------------------------------- combat
 
     @EventHandler
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
-        if (!(event.getDamager() instanceof Player damager)) {
-            return;
-        }
-        if (!(damager.getVehicle() instanceof Horse horse)) {
-            return;
-        }
+        if (!(event.getDamager() instanceof Player damager)) return;
+        if (!(damager.getVehicle() instanceof Horse horse)) return;
 
         ItemStack mainHand = damager.getInventory().getItemInMainHand();
-        if (!config.isLanceItem(mainHand.getType())) {
-            return;
-        }
+        if (!config.isLanceItem(mainHand.getType())) return;
 
-        // This is a jousting attack — cancel vanilla damage
-        event.setCancelled(true);
+        // Cooldown gate: no lance damage during cooldown.
+        if (cooldowns.isOnCooldown(damager.getUniqueId())) { event.setCancelled(true); return; }
 
-        // Check lance durability
-        ItemMeta meta = mainHand.getItemMeta();
-        if (meta == null) return;
-        PersistentDataContainer pdc = meta.getPersistentDataContainer();
-        int uses = pdc.getOrDefault(lanceUsesKey, PersistentDataType.INTEGER, 0);
+        LanceTier tier = LanceTier.fromMaterial(mainHand.getType());
+        int maxUses = config.getLanceMaxUses(mainHand.getType());
+        int uses = lances.getUses(mainHand);
 
-        if (uses >= config.getLanceMaxUses()) {
-            // Lance is broken — no damage, no sound
-            return;
-        }
+        // Broken lance is decorative only: no damage, no cooldown.
+        if (uses >= maxUses) { event.setCancelled(true); return; }
 
-        // Get momentum and calculate damage (lance tier adds a flat bonus to the horse-speed cap)
+        if (!(event.getEntity() instanceof LivingEntity victim)) return;
+
+        // --- damage calculation -------------------------------------------------
         double momentum = MomentumTracker.getMomentumDistance(damager.getUniqueId());
-        double baseMaxDamage = HorseSpeedTier.getMaxDamage(horse, config);
-        double lanceBonus = config.getLanceDamageBonus(mainHand.getType());
-        double damage = HorseSpeedTier.calculateDamage(
-            momentum,
-            config.getMinimumMomentumDistance(),
-            baseMaxDamage + lanceBonus
-        );
+        double speedCap = HorseSpeedTier.getMaxDamage(horse, config);
+        double base = HorseSpeedTier.calculateDamage(
+                momentum,
+                config.getMinimumMomentumDistance(),
+                config.getFullMomentumDistance(),
+                speedCap + config.getLanceDamageBonus(mainHand.getType()));
 
-        if (damage > 0) {
-            event.getEntity().damage(damage, damager);
-
-            // Play hit sound
-            playSound(damager, config.getHitSound());
-
-            // Check for knockoff (mounted targets only)
-            if (event.getEntity() instanceof Player target) {
-                if (target.getVehicle() instanceof Horse) {
-                    if (shouldKnockoff(momentum, config.getMinimumMomentumDistance())) {
-                        target.eject();
-                        playSound(damager, config.getKnockoffSound());
-                    }
-                }
-            }
-
-            // Apply knockback
-            Vector direction = damager.getLocation().getDirection();
-            event.getEntity().setVelocity(event.getEntity().getVelocity().add(direction.multiply(0.5)));
-
-            // Consume one lance use
-            uses++;
-            pdc.set(lanceUsesKey, PersistentDataType.INTEGER, uses);
-            if (uses >= config.getLanceMaxUses()) {
-                meta.displayName(Component.text("Broken Lance").color(NamedTextColor.DARK_GRAY));
-            }
-            mainHand.setItemMeta(meta);
+        if (base <= 0) {
+            // Not enough momentum to land a real strike; cancel, no use consumed, no cooldown.
+            event.setCancelled(true);
+            return;
         }
 
-        // Reset momentum after every hit attempt
+        // Lance damage depends ONLY on momentum, horse tier and lance tier.
+        // Sharpness and Strength are deliberately ignored so buffs can't inflate a charge.
+        double damage = DamageCalculator.clamp(base, config.getFinalDamageHardCap());
+
+        // --- shield interaction -------------------------------------------------
+        boolean blocked = victim instanceof Player vp && vp.isBlocking();
+        if (blocked) {
+            event.setCancelled(true); // shield absorbs; no health damage
+            Player target = (Player) victim;
+            EquipmentSlot hand = shieldHand(target);
+            if (hand != null) {
+                damageShield(target, hand);
+            }
+            if (config.isShieldKnockbackOnBlock()) {
+                applyKnockback(damager, target);
+            }
+            playSound(target, config.getShieldSound());
+            consumeUse(mainHand, uses, tier, maxUses);
+            if (config.isShieldCooldownOnBlock()) {
+                cooldowns.start(damager.getUniqueId(), config.getLanceCooldownMs());
+            }
+            MomentumTracker.resetMomentum(damager.getUniqueId());
+            barManager.update(damager, 0.0, tier);
+            return; // blocked hit deals no health damage
+        }
+
+        // --- normal hit ---------------------------------------------------------
+        // Set the damage on THIS event instead of calling victim.damage(), which would
+        // re-fire EntityDamageByEntityEvent and recurse into this handler (StackOverflow).
+        // Config damage is in HEARTS; Minecraft damage is half-hearts (2 points = 1 heart).
+        event.setDamage(damage * 2.0);
+        playSound(damager, config.getHitSound());
+        applyKnockback(damager, victim);
+
+        if (config.isDebugDamage()) {
+            double frac = HorseSpeedTier.momentumFraction(momentum, config.getFullMomentumDistance());
+            damager.sendMessage("§e[Joust] §f" + String.format("%.1f", damage) + " hearts §7| momentum "
+                    + (int) Math.round(frac * 100) + "% | horse " + HorseSpeedTier.tierOf(horse, config)
+                    + " | lance " + (tier == null ? "?" : tier.name()));
+        }
+
+        // JOUSTING mode (mounted vs mounted) only: chance to dismount.
+        boolean joustMode = victim instanceof Player tp && tp.getVehicle() instanceof Horse;
+        if (joustMode && shouldKnockoff(momentum)) {
+            victim.leaveVehicle();
+            playSound(damager, config.getKnockoffSound());
+        }
+
+        consumeUse(mainHand, uses, tier, maxUses);
+        cooldowns.start(damager.getUniqueId(), config.getLanceCooldownMs());
         MomentumTracker.resetMomentum(damager.getUniqueId());
+        barManager.update(damager, 0.0, tier);
     }
 
-    private boolean shouldKnockoff(double momentum, double minDistance) {
+    // ---------------------------------------------------------------- cleanup
+
+    @EventHandler
+    public void onVehicleExit(VehicleExitEvent event) {
+        if (event.getExited() instanceof Player player) {
+            MomentumTracker.resetMomentum(player.getUniqueId());
+            barManager.remove(player.getUniqueId());
+            cooldowns.clear(player.getUniqueId());
+        }
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        MomentumTracker.resetMomentum(player.getUniqueId());
+        barManager.remove(player.getUniqueId());
+        cooldowns.clear(player.getUniqueId());
+    }
+
+    // ---------------------------------------------------------------- helpers
+
+    private void consumeUse(ItemStack lance, int currentUses, LanceTier tier, int maxUses) {
+        // LanceItems.setUses refreshes durability lore and renames to "Broken Lance" at the cap.
+        lances.setUses(lance, currentUses + 1, tier, maxUses);
+    }
+
+    private EquipmentSlot shieldHand(Player target) {
+        if (target.getInventory().getItemInOffHand().getType().name().equals("SHIELD")) {
+            return EquipmentSlot.OFF_HAND;
+        }
+        if (target.getInventory().getItemInMainHand().getType().name().equals("SHIELD")) {
+            return EquipmentSlot.HAND;
+        }
+        return null;
+    }
+
+    private void damageShield(Player target, EquipmentSlot hand) {
+        ItemStack shield = hand == EquipmentSlot.OFF_HAND
+                ? target.getInventory().getItemInOffHand()
+                : target.getInventory().getItemInMainHand();
+        if (shield == null) return;
+        ItemMeta meta = shield.getItemMeta();
+        if (!(meta instanceof Damageable dmg)) return;
+
+        int max = shield.getType().getMaxDurability();
+        int newDamage = dmg.getDamage() + config.getShieldDurabilityDamage();
+        if (max > 0 && newDamage >= max) {
+            shield.setAmount(0);
+            playSound(target, config.getBreakSound());
+        } else {
+            dmg.setDamage(newDamage);
+            shield.setItemMeta(meta);
+        }
+        if (hand == EquipmentSlot.OFF_HAND) {
+            target.getInventory().setItemInOffHand(shield);
+        } else {
+            target.getInventory().setItemInMainHand(shield);
+        }
+    }
+
+    private void applyKnockback(Player source, LivingEntity victim) {
+        Vector dir = source.getLocation().getDirection();
+        dir.setY(0);
+        if (dir.lengthSquared() == 0) dir = new Vector(0, 0, 1);
+        dir.normalize().multiply(config.getKnockbackStrength()).setY(0.25);
+        victim.setVelocity(victim.getVelocity().add(dir));
+    }
+
+    private boolean shouldKnockoff(double momentum) {
+        double minDistance = config.getMinimumMomentumDistance();
+        double fullDistance = config.getFullMomentumDistance();
         int chance;
         if (momentum < minDistance) {
             chance = config.getKnockoffChanceZeroMomentum();
         } else {
-            double normalizedMomentum = Math.min(momentum / (minDistance * 3), 1.0);
-            double fullChance = config.getKnockoffChanceFullMomentum();
-            double zeroChance = config.getKnockoffChanceZeroMomentum();
-            chance = (int) (zeroChance + (fullChance - zeroChance) * normalizedMomentum);
+            double span = Math.max(0.0001, fullDistance - minDistance);
+            double normalized = Math.min((momentum - minDistance) / span, 1.0);
+            double zero = config.getKnockoffChanceZeroMomentum();
+            double full = config.getKnockoffChanceFullMomentum();
+            chance = (int) Math.round(zero + (full - zero) * normalized);
         }
         return random.nextInt(100) < chance;
     }

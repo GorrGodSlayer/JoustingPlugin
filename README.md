@@ -97,6 +97,27 @@ k4nefr-cmd
 
 GorrGodSlayer (AKA Alex)
 
-## Missing 
+## Horse Combat System (added 2026-06-18)
 
-The fundamentals missing are: Lance tiers, durability and lance breaking, Lance cooldown, shield interaction between a lance and a shield, medium horse tiers, the momentum reset, the momentum visual bar, strength pots/enchants handling, PvP mode cs jousting mode distinctions. To be worked on in the upcoming days
+Implemented by GorrGodSlayer
+
+- Three lance tiers as distinct items — Iron (`END_ROD`), Gold (`BLAZE_ROD`), Diamond (`BREEZE_ROD`)
+- Lance durability + breaking (lance becomes decorative when spent)
+- Post-hit / post-block lance cooldown
+- Shield interaction (shield takes durability, knockback, cooldown; no health damage on a block)
+- Three horse speed tiers (slow / medium / fast → 3 / 5 / 6 caps)
+- Momentum reset on stop, hit, or dismount
+- Momentum visual **BossBar**
+- Strength potion + Sharpness enchant handling, clamped so no one-hit kills
+- PvP mode (foot target) vs Jousting mode (mounted target, dismount chance)
+- `/jousting give <iron|gold|diamond>`
+
+Build & test locally with `mvn clean verify`. 
+test report, and review.
+
+## Known minor bugs
+
+- The momentum bar sometimes hallucinates 
+- Need to test the lances against shields and against players 
+- Need to see if knockback/unmounting works
+- Need to see if i coded the lances properly

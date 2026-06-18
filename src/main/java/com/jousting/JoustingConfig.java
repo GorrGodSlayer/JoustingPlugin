@@ -8,21 +8,51 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Typed view over config.yml. Reloaded via {@link #reload()}.
+ */
 public class JoustingConfig {
     private final JavaPlugin plugin;
     private FileConfiguration config;
 
-    private Map<Material, Double> lanceTiers;
+    // Lance tiers: material -> (damage bonus, max uses)
+    private Map<Material, Double> lanceDamageBonus;
+    private Map<Material, Integer> lanceMaxUsesByMaterial;
     private int lanceMaxUses;
+    private long lanceCooldownMs;
+
+    // Horse speed tiers
+    private double mediumTierSpeedThreshold;
     private double highTierSpeedThreshold;
     private double lowTierMaxDamage;
+    private double mediumTierMaxDamage;
     private double highTierMaxDamage;
-    private double minimumMomentumDistance;
+
+    // Momentum
     private double minimumRunSpeed;
+    private double minimumMomentumDistance;
+    private double fullMomentumDistance;
+    private double momentumDecayPerTick;
+    private boolean debugDamage;
+
+    // Balancing
+    private double finalDamageHardCap;
+
+    // Shield
+    private int shieldDurabilityDamage;
+    private boolean shieldCooldownOnBlock;
+    private boolean shieldKnockbackOnBlock;
+
+    // Knockoff / knockback
     private int knockoffChanceZeroMomentum;
     private int knockoffChanceFullMomentum;
+    private double knockbackStrength;
+
+    // Sounds
     private String hitSound;
     private String knockoffSound;
+    private String shieldSound;
+    private String breakSound;
 
     public JoustingConfig(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -32,58 +62,94 @@ public class JoustingConfig {
         plugin.reloadConfig();
         config = plugin.getConfig();
 
-        // Load lance tiers
-        this.lanceTiers = new HashMap<>();
+        // Lance tiers
+        this.lanceDamageBonus = new HashMap<>();
+        this.lanceMaxUsesByMaterial = new HashMap<>();
+        this.lanceMaxUses = config.getInt("lance-max-uses", 10);
         ConfigurationSection tierSection = config.getConfigurationSection("lance-tiers");
         if (tierSection != null) {
             for (String key : tierSection.getKeys(false)) {
-                try {
-                    Material mat = Material.valueOf(key);
-                    double bonus = tierSection.getDouble(key + ".damage-bonus", 0.0);
-                    lanceTiers.put(mat, bonus);
-                } catch (IllegalArgumentException e) {
+                Material mat = Material.matchMaterial(key);
+                if (mat == null) {
                     plugin.getLogger().warning("Invalid lance tier material: " + key + ", skipping");
+                    continue;
                 }
+                lanceDamageBonus.put(mat, tierSection.getDouble(key + ".damage-bonus", 0.0));
+                lanceMaxUsesByMaterial.put(mat, tierSection.getInt(key + ".max-uses", lanceMaxUses));
             }
         }
-        if (lanceTiers.isEmpty()) {
-            plugin.getLogger().warning("No valid lance tiers configured, falling back to IRON_SPEAR");
-            lanceTiers.put(Material.IRON_SPEAR, 0.0);
+        if (lanceDamageBonus.isEmpty()) {
+            plugin.getLogger().warning("No valid lance tiers configured; falling back to END_ROD");
+            lanceDamageBonus.put(Material.END_ROD, 0.0);
+            lanceMaxUsesByMaterial.put(Material.END_ROD, lanceMaxUses);
         }
 
-        // Load lance max uses
-        this.lanceMaxUses = config.getInt("lance-max-uses", 10);
+        this.lanceCooldownMs = config.getLong("lance-cooldown-ms", 1500L);
 
-        // Load speed tier threshold
-        this.highTierSpeedThreshold = config.getDouble("high-tier-speed-threshold", 1.5);
-
-        // Load damage values
+        // Speed tiers
+        this.mediumTierSpeedThreshold = config.getDouble("medium-tier-speed-threshold", 0.2);
+        this.highTierSpeedThreshold = config.getDouble("high-tier-speed-threshold", 0.28);
         this.lowTierMaxDamage = config.getDouble("low-tier-max-damage", 3.0);
+        this.mediumTierMaxDamage = config.getDouble("medium-tier-max-damage", 5.0);
         this.highTierMaxDamage = config.getDouble("high-tier-max-damage", 6.0);
 
-        // Load momentum values
-        this.minimumMomentumDistance = config.getDouble("minimum-momentum-distance", 5.0);
+        // Momentum
         this.minimumRunSpeed = config.getDouble("minimum-run-speed", 0.15);
+        this.minimumMomentumDistance = config.getDouble("minimum-momentum-distance", 5.0);
+        this.fullMomentumDistance = config.getDouble("full-momentum-distance", 15.0);
+        this.momentumDecayPerTick = config.getDouble("momentum-decay-per-tick", 0.5);
+        this.debugDamage = config.getBoolean("debug-damage", true);
 
-        // Load knockoff chances
+        // Balancing
+        this.finalDamageHardCap = config.getDouble("final-damage-hard-cap", 9.0);
+
+        // Shield
+        this.shieldDurabilityDamage = config.getInt("shield.durability-damage", 50);
+        this.shieldCooldownOnBlock = config.getBoolean("shield.cooldown-on-block", true);
+        this.shieldKnockbackOnBlock = config.getBoolean("shield.knockback-on-block", true);
+
+        // Knockoff / knockback
         this.knockoffChanceZeroMomentum = config.getInt("knockoff-chance-zero-momentum", 5);
         this.knockoffChanceFullMomentum = config.getInt("knockoff-chance-full-momentum", 70);
+        this.knockbackStrength = config.getDouble("knockback-strength", 0.5);
 
-        // Load sounds
-        this.hitSound = config.getString("sounds.hit", "entity.player.attack.strong");
-        this.knockoffSound = config.getString("sounds.knockoff", "entity.item.break");
+        // Sounds
+        this.hitSound = config.getString("sounds.hit", "ENTITY_PLAYER_ATTACK_STRONG");
+        this.knockoffSound = config.getString("sounds.knockoff", "ENTITY_ITEM_BREAK");
+        this.shieldSound = config.getString("sounds.shield", "ITEM_SHIELD_BLOCK");
+        this.breakSound = config.getString("sounds.break", "ENTITY_ITEM_BREAK");
     }
 
-    public boolean isLanceItem(Material material) { return lanceTiers.containsKey(material); }
-    public double getLanceDamageBonus(Material material) { return lanceTiers.getOrDefault(material, 0.0); }
+    public boolean isLanceItem(Material material) { return lanceDamageBonus.containsKey(material); }
+    public double getLanceDamageBonus(Material material) { return lanceDamageBonus.getOrDefault(material, 0.0); }
+    public int getLanceMaxUses(Material material) { return lanceMaxUsesByMaterial.getOrDefault(material, lanceMaxUses); }
     public int getLanceMaxUses() { return lanceMaxUses; }
+    public long getLanceCooldownMs() { return lanceCooldownMs; }
+
+    public double getMediumTierSpeedThreshold() { return mediumTierSpeedThreshold; }
     public double getHighTierSpeedThreshold() { return highTierSpeedThreshold; }
     public double getLowTierMaxDamage() { return lowTierMaxDamage; }
+    public double getMediumTierMaxDamage() { return mediumTierMaxDamage; }
     public double getHighTierMaxDamage() { return highTierMaxDamage; }
-    public double getMinimumMomentumDistance() { return minimumMomentumDistance; }
+
     public double getMinimumRunSpeed() { return minimumRunSpeed; }
+    public double getMinimumMomentumDistance() { return minimumMomentumDistance; }
+    public double getFullMomentumDistance() { return fullMomentumDistance; }
+    public double getMomentumDecayPerTick() { return momentumDecayPerTick; }
+    public boolean isDebugDamage() { return debugDamage; }
+
+    public double getFinalDamageHardCap() { return finalDamageHardCap; }
+
+    public int getShieldDurabilityDamage() { return shieldDurabilityDamage; }
+    public boolean isShieldCooldownOnBlock() { return shieldCooldownOnBlock; }
+    public boolean isShieldKnockbackOnBlock() { return shieldKnockbackOnBlock; }
+
     public int getKnockoffChanceZeroMomentum() { return knockoffChanceZeroMomentum; }
     public int getKnockoffChanceFullMomentum() { return knockoffChanceFullMomentum; }
+    public double getKnockbackStrength() { return knockbackStrength; }
+
     public String getHitSound() { return hitSound; }
     public String getKnockoffSound() { return knockoffSound; }
+    public String getShieldSound() { return shieldSound; }
+    public String getBreakSound() { return breakSound; }
 }
