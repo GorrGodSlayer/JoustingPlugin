@@ -24,7 +24,7 @@ class DamageBalanceTest {
 
     @Test
     void neverOneShotsFullHealthPlayer() {
-        // Worst case (huge base) is still clamped well under a player's 20 health points.
-        assertTrue(DamageCalculator.clamp(1000.0, 9.0) < 20.0);
+        // Worst case (huge base) is still clamped under a player's 10 hearts of health.
+        assertTrue(DamageCalculator.clamp(1000.0, 9.0) < 10.0);
     }
 }

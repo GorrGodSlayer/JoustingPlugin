@@ -38,6 +38,36 @@ class CooldownManagerTest {
     }
 
     @Test
+    void zeroDurationExpiresImmediately() {
+        Clock clock = new Clock();
+        CooldownManager cd = new CooldownManager(() -> clock.now);
+        UUID id = UUID.randomUUID();
+
+        cd.start(id, 0);
+        assertFalse(cd.isOnCooldown(id));
+        assertEquals(0, cd.remaining(id));
+    }
+
+    @Test
+    void playersHaveIndependentCooldowns() {
+        Clock clock = new Clock();
+        CooldownManager cd = new CooldownManager(() -> clock.now);
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+
+        cd.start(a, 1000);
+        cd.start(b, 2000);
+
+        clock.now = 1500;
+        assertFalse(cd.isOnCooldown(a), "a expired at 1000");
+        assertTrue(cd.isOnCooldown(b), "b still cooling until 2000");
+        assertEquals(500, cd.remaining(b));
+
+        cd.clear(b);
+        assertFalse(cd.isOnCooldown(b));
+    }
+
+    @Test
     void clearRemovesCooldown() {
         Clock clock = new Clock();
         CooldownManager cd = new CooldownManager(() -> clock.now);

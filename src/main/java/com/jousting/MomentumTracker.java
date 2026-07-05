@@ -6,32 +6,12 @@ import java.util.UUID;
 
 /**
  * Tracks accumulated travel distance ("momentum") per riding player.
- * Distance only accrues while the listener decides the horse is moving fast enough.
+ * Distance only accrues while {@link MomentumTask} decides the horse is moving fast enough.
  */
-public class MomentumTracker {
+public final class MomentumTracker {
     private static final Map<UUID, PlayerMomentum> momentumData = new HashMap<>();
 
-    public static void trackLocation(UUID playerUUID, double x, double y, double z) {
-        PlayerMomentum data = momentumData.getOrDefault(playerUUID, new PlayerMomentum());
-
-        if (data.lastX == null) {
-            data.lastX = x;
-            data.lastY = y;
-            data.lastZ = z;
-        } else {
-            double distance = Math.sqrt(
-                Math.pow(x - data.lastX, 2) +
-                Math.pow(y - data.lastY, 2) +
-                Math.pow(z - data.lastZ, 2)
-            );
-            data.totalDistance += distance;
-            data.lastX = x;
-            data.lastY = y;
-            data.lastZ = z;
-        }
-
-        momentumData.put(playerUUID, data);
-    }
+    private MomentumTracker() {}
 
     /** Add a movement delta (blocks) to the player's momentum total. */
     public static void addDistance(UUID playerUUID, double distance) {
@@ -78,10 +58,7 @@ public class MomentumTracker {
         momentumData.clear();
     }
 
-    public static class PlayerMomentum {
-        public Double lastX;
-        public Double lastY;
-        public Double lastZ;
-        public double totalDistance = 0;
+    private static class PlayerMomentum {
+        double totalDistance = 0;
     }
 }

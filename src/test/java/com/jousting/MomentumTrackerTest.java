@@ -17,21 +17,36 @@ class MomentumTrackerTest {
     @Test
     void accumulatesDistance() {
         UUID id = UUID.randomUUID();
-        MomentumTracker.trackLocation(id, 0, 0, 0); // first point sets origin, no distance
-        assertEquals(0.0, MomentumTracker.getMomentumDistance(id), 1e-9);
-
-        MomentumTracker.trackLocation(id, 3, 0, 4); // distance 5 from origin
+        MomentumTracker.addDistance(id, 5.0);
         assertEquals(5.0, MomentumTracker.getMomentumDistance(id), 1e-9);
 
-        MomentumTracker.trackLocation(id, 3, 0, 4); // no movement
+        MomentumTracker.addDistance(id, 0.0); // no movement
         assertEquals(5.0, MomentumTracker.getMomentumDistance(id), 1e-9);
+    }
+
+    @Test
+    void cappedAdditionNeverExceedsCap() {
+        UUID id = UUID.randomUUID();
+        MomentumTracker.addDistanceCapped(id, 10.0, 15.0);
+        MomentumTracker.addDistanceCapped(id, 10.0, 15.0);
+        assertEquals(15.0, MomentumTracker.getMomentumDistance(id), 1e-9);
+    }
+
+    @Test
+    void decayBleedsDownAndClearsAtZero() {
+        UUID id = UUID.randomUUID();
+        MomentumTracker.addDistance(id, 5.0);
+        MomentumTracker.decay(id, 2.0);
+        assertEquals(3.0, MomentumTracker.getMomentumDistance(id), 1e-9);
+
+        MomentumTracker.decay(id, 3.0);
+        assertFalse(MomentumTracker.hasData(id));
     }
 
     @Test
     void resetClearsMomentum() {
         UUID id = UUID.randomUUID();
-        MomentumTracker.trackLocation(id, 0, 0, 0);
-        MomentumTracker.trackLocation(id, 10, 0, 0);
+        MomentumTracker.addDistance(id, 10.0);
         assertTrue(MomentumTracker.getMomentumDistance(id) > 0);
 
         MomentumTracker.resetMomentum(id);
@@ -42,8 +57,7 @@ class MomentumTrackerTest {
     @Test
     void fractionTracksTowardFullDistance() {
         UUID id = UUID.randomUUID();
-        MomentumTracker.trackLocation(id, 0, 0, 0);
-        MomentumTracker.trackLocation(id, 7.5, 0, 0);
+        MomentumTracker.addDistance(id, 7.5);
         assertEquals(0.5, MomentumTracker.getFraction(id, 15.0), 1e-9);
     }
 

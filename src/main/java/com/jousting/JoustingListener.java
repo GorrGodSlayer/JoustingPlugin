@@ -1,5 +1,6 @@
 package com.jousting;
 
+import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.entity.Horse;
 import org.bukkit.entity.LivingEntity;
@@ -7,6 +8,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.vehicle.VehicleExitEvent;
 import org.bukkit.inventory.EquipmentSlot;
@@ -41,13 +43,18 @@ public class JoustingListener implements Listener {
 
     // ---------------------------------------------------------------- combat
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        // Only direct melee strikes count as lance hits. Thorns and sweep damage also
+        // arrive here with the rider as damager and must not trigger a charge.
+        if (event.getCause() != EntityDamageEvent.DamageCause.ENTITY_ATTACK) return;
         if (!(event.getDamager() instanceof Player damager)) return;
         if (!(damager.getVehicle() instanceof Horse horse)) return;
 
         ItemStack mainHand = damager.getInventory().getItemInMainHand();
         if (!config.isLanceItem(mainHand.getType())) return;
+        // Without jousting.use (default true) a lance is just an ordinary melee weapon.
+        if (!damager.hasPermission("jousting.use")) return;
 
         // Cooldown gate: no lance damage during cooldown.
         if (cooldowns.isOnCooldown(damager.getUniqueId())) { event.setCancelled(true); return; }
@@ -147,6 +154,8 @@ public class JoustingListener implements Listener {
         MomentumTracker.resetMomentum(player.getUniqueId());
         barManager.remove(player.getUniqueId());
         cooldowns.clear(player.getUniqueId());
+        // MomentumTask only sees online players, so it can't clean this up itself.
+        plugin.getMomentumTask().forget(player.getUniqueId());
     }
 
     // ---------------------------------------------------------------- helpers
@@ -157,10 +166,10 @@ public class JoustingListener implements Listener {
     }
 
     private EquipmentSlot shieldHand(Player target) {
-        if (target.getInventory().getItemInOffHand().getType().name().equals("SHIELD")) {
+        if (target.getInventory().getItemInOffHand().getType() == Material.SHIELD) {
             return EquipmentSlot.OFF_HAND;
         }
-        if (target.getInventory().getItemInMainHand().getType().name().equals("SHIELD")) {
+        if (target.getInventory().getItemInMainHand().getType() == Material.SHIELD) {
             return EquipmentSlot.HAND;
         }
         return null;
@@ -214,12 +223,8 @@ public class JoustingListener implements Listener {
         return random.nextInt(100) < chance;
     }
 
-    private void playSound(Player player, String soundKey) {
-        try {
-            Sound sound = Sound.valueOf(soundKey);
-            player.getWorld().playSound(player.getLocation(), sound, 1.0f, 1.0f);
-        } catch (IllegalArgumentException e) {
-            plugin.getLogger().warning("Invalid sound key: " + soundKey);
-        }
+    private void playSound(Player player, Sound sound) {
+        if (sound == null) return; // invalid key already warned about at config load
+        player.getWorld().playSound(player.getLocation(), sound, 1.0f, 1.0f);
     }
 }

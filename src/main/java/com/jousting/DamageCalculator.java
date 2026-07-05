@@ -2,11 +2,12 @@ package com.jousting;
 
 /**
  * Pure damage-balancing math (no Bukkit types) so it can be unit-tested.
- * All values are Minecraft damage points (2 points = 1 heart).
+ * All values here are hearts; the listener converts to Minecraft damage points
+ * (2 points = 1 heart) only when it applies the event damage.
  *
  * Lance damage is intentionally independent of Sharpness and Strength: a charge's
  * damage comes only from momentum, horse speed tier and lance tier, then is clamped
- * to a hard cap so a single hit can never one-shot a full-health (20-point) player.
+ * to a hard cap so a single hit can never one-shot a full-health (10-heart) player.
  */
 public final class DamageCalculator {
 

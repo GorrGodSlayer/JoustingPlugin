@@ -9,7 +9,7 @@
 #   Iron Lance    -> IRON_SPEAR
 #   Gold Lance    -> GOLDEN_SPEAR
 #   Diamond Lance -> DIAMOND_SPEAR
-# damage-bonus = flat points added on top of the horse-speed cap (before the hard cap).
+# damage-bonus = flat hearts added on top of the horse-speed cap (before the hard cap).
 # max-uses     = successful lance hits before it breaks.
 # You can add the other spear tiers too (WOODEN_SPEAR, STONE_SPEAR, COPPER_SPEAR,
 # NETHERITE_SPEAR) — any material listed here counts as a lance.

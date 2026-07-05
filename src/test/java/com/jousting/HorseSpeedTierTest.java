@@ -28,6 +28,12 @@ class HorseSpeedTierTest {
     }
 
     @Test
+    void zeroDamageAtExactlyMinimumDistance() {
+        // The ramp starts at the minimum: fraction 0 -> damage 0.
+        assertEquals(0.0, HorseSpeedTier.calculateDamage(5.0, 5.0, 15.0, 6.0), 1e-9);
+    }
+
+    @Test
     void fullDamageAtOrAboveFullDistance() {
         assertEquals(6.0, HorseSpeedTier.calculateDamage(15.0, 5.0, 15.0, 6.0), 1e-9);
         assertEquals(6.0, HorseSpeedTier.calculateDamage(40.0, 5.0, 15.0, 6.0), 1e-9);

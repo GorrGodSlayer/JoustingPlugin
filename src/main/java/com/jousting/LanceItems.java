@@ -5,7 +5,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 
@@ -13,16 +12,17 @@ import java.util.List;
 
 /**
  * Builds and inspects lance items. Remaining uses are stored in the item's
- * PersistentDataContainer under "lance_uses"; a tag also marks the item as a
- * plugin-issued lance so random rods aren't treated as lances unless configured.
+ * PersistentDataContainer under "lance_uses", and a "lance" byte tag marks the item
+ * as plugin-issued so it can be told apart from an ordinary crafted spear
+ * (see {@link #isLance(ItemStack)}).
  */
 public class LanceItems {
-    private final Plugin plugin;
     private final NamespacedKey usesKey;
+    private final NamespacedKey lanceKey;
 
     public LanceItems(Plugin plugin) {
-        this.plugin = plugin;
         this.usesKey = new NamespacedKey(plugin, "lance_uses");
+        this.lanceKey = new NamespacedKey(plugin, "lance");
     }
 
     public NamespacedKey getUsesKey() { return usesKey; }
@@ -32,11 +32,20 @@ public class LanceItems {
         ItemStack item = new ItemStack(tier.getMaterial());
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
+            meta.getPersistentDataContainer().set(lanceKey, PersistentDataType.BYTE, (byte) 1);
             meta.getPersistentDataContainer().set(usesKey, PersistentDataType.INTEGER, 0);
             applyDisplay(meta, tier, 0, config.getLanceMaxUses(tier.getMaterial()));
             item.setItemMeta(meta);
         }
         return item;
+    }
+
+    /** True if the item carries the plugin-issued lance marker. */
+    public boolean isLance(ItemStack item) {
+        if (item == null) return false;
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return false;
+        return meta.getPersistentDataContainer().has(lanceKey, PersistentDataType.BYTE);
     }
 
     public int getUses(ItemStack item) {
@@ -48,6 +57,7 @@ public class LanceItems {
 
     /** Persist new use count and refresh display; renames to "Broken Lance" when spent. */
     public void setUses(ItemStack item, int uses, LanceTier tier, int maxUses) {
+        if (item == null) return;
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return;
         meta.getPersistentDataContainer().set(usesKey, PersistentDataType.INTEGER, uses);

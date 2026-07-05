@@ -35,13 +35,13 @@ public class MomentumTask extends BukkitRunnable {
         for (Player player : plugin.getServer().getOnlinePlayers()) {
             UUID id = player.getUniqueId();
 
-            if (!(player.getVehicle() instanceof Horse)) {
+            if (!(player.getVehicle() instanceof Horse horse)) {
                 lastLoc.remove(id);
                 barManager.remove(id);
                 continue;
             }
 
-            Location now = player.getLocation();
+            Location now = horse.getLocation();
             Location prev = lastLoc.put(id, now.clone());
             if (prev == null || prev.getWorld() != now.getWorld()) {
                 continue; // first sample this ride
@@ -59,5 +59,10 @@ public class MomentumTask extends BukkitRunnable {
 
             barManager.update(player, MomentumTracker.getFraction(id, full), tier);
         }
+    }
+
+    /** Drop a player's cached location sample (used when they quit mid-ride). */
+    public void forget(UUID playerId) {
+        lastLoc.remove(playerId);
     }
 }

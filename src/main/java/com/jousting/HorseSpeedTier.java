@@ -19,6 +19,7 @@ public final class HorseSpeedTier {
 
     /** Reads the horse's movement speed, null-safe. Returns 0 if unavailable. */
     public static double speedOf(Horse horse) {
+        if (horse == null) return 0.0;
         AttributeInstance attr = horse.getAttribute(Attribute.MOVEMENT_SPEED);
         return attr == null ? 0.0 : attr.getValue();
     }

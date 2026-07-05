@@ -12,12 +12,10 @@ import java.util.Arrays;
 import java.util.List;
 
 public class JoustingCommand implements CommandExecutor, TabCompleter {
-    private final JoustingPlugin plugin;
     private final JoustingConfig config;
     private final LanceItems lances;
 
-    public JoustingCommand(JoustingPlugin plugin, JoustingConfig config, LanceItems lances) {
-        this.plugin = plugin;
+    public JoustingCommand(JoustingConfig config, LanceItems lances) {
         this.config = config;
         this.lances = lances;
     }
@@ -56,8 +54,15 @@ public class JoustingCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("§cUnknown lance tier: " + args[1] + " (iron|gold|diamond)");
                 return true;
             }
+            if (tier.getMaterial() == null) {
+                sender.sendMessage("§cThis server version doesn't have the " + tier.getDisplayName() + " spear item.");
+                return true;
+            }
             ItemStack lance = lances.create(tier, config);
-            player.getInventory().addItem(lance);
+            // Inventory full: drop it at their feet instead of silently voiding it.
+            if (!player.getInventory().addItem(lance).isEmpty()) {
+                player.getWorld().dropItemNaturally(player.getLocation(), lance);
+            }
             sender.sendMessage("§aGave you a " + tier.getDisplayName() + ".");
             return true;
         }

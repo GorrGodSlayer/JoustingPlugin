@@ -1,6 +1,7 @@
 package com.jousting;
 
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -10,8 +11,9 @@ import java.util.Map;
 
 /**
  * Typed view over config.yml. Reloaded via {@link #reload()}.
+ * Final because the constructor calls {@link #reload()}.
  */
-public class JoustingConfig {
+public final class JoustingConfig {
     private final JavaPlugin plugin;
     private FileConfiguration config;
 
@@ -48,14 +50,15 @@ public class JoustingConfig {
     private int knockoffChanceFullMomentum;
     private double knockbackStrength;
 
-    // Sounds
-    private String hitSound;
-    private String knockoffSound;
-    private String shieldSound;
-    private String breakSound;
+    // Sounds (parsed once per reload so hits don't re-parse enum names)
+    private Sound hitSound;
+    private Sound knockoffSound;
+    private Sound shieldSound;
+    private Sound breakSound;
 
     public JoustingConfig(JavaPlugin plugin) {
         this.plugin = plugin;
+        reload();
     }
 
     public void reload() {
@@ -114,10 +117,71 @@ public class JoustingConfig {
         this.knockbackStrength = config.getDouble("knockback-strength", 0.5);
 
         // Sounds
-        this.hitSound = config.getString("sounds.hit", "ENTITY_PLAYER_ATTACK_STRONG");
-        this.knockoffSound = config.getString("sounds.knockoff", "ENTITY_ITEM_BREAK");
-        this.shieldSound = config.getString("sounds.shield", "ITEM_SHIELD_BLOCK");
-        this.breakSound = config.getString("sounds.break", "ENTITY_ITEM_BREAK");
+        this.hitSound = parseSound(config.getString("sounds.hit", "ENTITY_PLAYER_ATTACK_STRONG"));
+        this.knockoffSound = parseSound(config.getString("sounds.knockoff", "ENTITY_ITEM_BREAK"));
+        this.shieldSound = parseSound(config.getString("sounds.shield", "ITEM_SHIELD_BLOCK"));
+        this.breakSound = parseSound(config.getString("sounds.break", "ENTITY_ITEM_BREAK"));
+
+        validate();
+    }
+
+    private Sound parseSound(String key) {
+        try {
+            return Sound.valueOf(key);
+        } catch (IllegalArgumentException e) {
+            plugin.getLogger().warning("Invalid sound key: " + key + "; sound disabled");
+            return null;
+        }
+    }
+
+    /** Sanity-checks loaded values; clamps where safe and warns otherwise. */
+    private void validate() {
+        if (mediumTierSpeedThreshold >= highTierSpeedThreshold) {
+            plugin.getLogger().warning("medium-tier-speed-threshold (" + mediumTierSpeedThreshold
+                    + ") should be less than high-tier-speed-threshold (" + highTierSpeedThreshold + ")");
+        }
+
+        knockoffChanceZeroMomentum = clampPercent("knockoff-chance-zero-momentum", knockoffChanceZeroMomentum);
+        knockoffChanceFullMomentum = clampPercent("knockoff-chance-full-momentum", knockoffChanceFullMomentum);
+
+        lowTierMaxDamage = nonNegative("low-tier-max-damage", lowTierMaxDamage);
+        mediumTierMaxDamage = nonNegative("medium-tier-max-damage", mediumTierMaxDamage);
+        highTierMaxDamage = nonNegative("high-tier-max-damage", highTierMaxDamage);
+        finalDamageHardCap = nonNegative("final-damage-hard-cap", finalDamageHardCap);
+
+        // A negative run speed would build momentum while standing still, and a negative
+        // decay would grow momentum without bound instead of bleeding it off.
+        minimumRunSpeed = nonNegative("minimum-run-speed", minimumRunSpeed);
+        momentumDecayPerTick = nonNegative("momentum-decay-per-tick", momentumDecayPerTick);
+
+        minimumMomentumDistance = nonNegative("minimum-momentum-distance", minimumMomentumDistance);
+        if (fullMomentumDistance <= minimumMomentumDistance) {
+            plugin.getLogger().warning("full-momentum-distance (" + fullMomentumDistance
+                    + ") should be greater than minimum-momentum-distance (" + minimumMomentumDistance + ")");
+        }
+
+        // Negative durability damage would repair the shield on every block.
+        if (shieldDurabilityDamage < 0) {
+            plugin.getLogger().warning("shield.durability-damage (" + shieldDurabilityDamage
+                    + ") must be >= 0; using 0");
+            shieldDurabilityDamage = 0;
+        }
+    }
+
+    private int clampPercent(String path, int value) {
+        if (value < 0 || value > 100) {
+            plugin.getLogger().warning(path + " (" + value + ") clamped to 0-100");
+            return Math.max(0, Math.min(100, value));
+        }
+        return value;
+    }
+
+    private double nonNegative(String path, double value) {
+        if (value < 0) {
+            plugin.getLogger().warning(path + " (" + value + ") must be >= 0; using 0");
+            return 0.0;
+        }
+        return value;
     }
 
     public boolean isLanceItem(Material material) { return lanceDamageBonus.containsKey(material); }
@@ -148,8 +212,8 @@ public class JoustingConfig {
     public int getKnockoffChanceFullMomentum() { return knockoffChanceFullMomentum; }
     public double getKnockbackStrength() { return knockbackStrength; }
 
-    public String getHitSound() { return hitSound; }
-    public String getKnockoffSound() { return knockoffSound; }
-    public String getShieldSound() { return shieldSound; }
-    public String getBreakSound() { return breakSound; }
+    public Sound getHitSound() { return hitSound; }
+    public Sound getKnockoffSound() { return knockoffSound; }
+    public Sound getShieldSound() { return shieldSound; }
+    public Sound getBreakSound() { return breakSound; }
 }

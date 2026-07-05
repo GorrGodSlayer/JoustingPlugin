@@ -19,6 +19,7 @@ public class MomentumBarManager {
 
     /** Create/update the player's bar to the given fill fraction (0..1). */
     public void update(Player player, double fraction, LanceTier tier) {
+        if (!player.isOnline()) return;
         fraction = Math.max(0.0, Math.min(1.0, fraction));
         BossBar bar = bars.get(player.getUniqueId());
         if (bar == null) {
