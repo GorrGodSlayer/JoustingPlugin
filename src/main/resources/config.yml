@@ -46,13 +46,14 @@ high-tier-max-damage: 6.0
 
 # --- Momentum ---------------------------------------------------
 # Minimum horse velocity (blocks/tick) required to build momentum.
-# Below this, momentum resets to zero (prevents running in place).
+# Below this, momentum bleeds away at momentum-decay-per-tick (prevents running in place).
 minimum-run-speed: 0.15
 
 # Minimum distance (blocks) travelled before any damage is dealt.
 minimum-momentum-distance: 5.0
 
 # Distance (blocks) at which momentum is "full" (bar full, cap reached).
+# Must be greater than minimum-momentum-distance, or the lance would never deal damage.
 full-momentum-distance: 15.0
 
 # How fast momentum bleeds away (blocks/tick) when the horse slows below run speed.

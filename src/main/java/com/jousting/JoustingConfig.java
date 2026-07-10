@@ -155,9 +155,16 @@ public final class JoustingConfig {
         momentumDecayPerTick = nonNegative("momentum-decay-per-tick", momentumDecayPerTick);
 
         minimumMomentumDistance = nonNegative("minimum-momentum-distance", minimumMomentumDistance);
+        // Momentum is capped at full-momentum-distance, and no damage is dealt below
+        // minimum-momentum-distance. If full <= minimum the cap sits under the damage
+        // threshold, so every lance hit would silently deal zero damage forever. Coerce
+        // rather than only warn, so a typo can't disable the plugin.
         if (fullMomentumDistance <= minimumMomentumDistance) {
+            double corrected = minimumMomentumDistance + 1.0;
             plugin.getLogger().warning("full-momentum-distance (" + fullMomentumDistance
-                    + ") should be greater than minimum-momentum-distance (" + minimumMomentumDistance + ")");
+                    + ") must be greater than minimum-momentum-distance (" + minimumMomentumDistance
+                    + "); using " + corrected);
+            fullMomentumDistance = corrected;
         }
 
         // Negative durability damage would repair the shield on every block.

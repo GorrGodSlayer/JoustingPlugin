@@ -2,6 +2,7 @@ package com.jousting;
 
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Horse;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -56,6 +57,11 @@ public class JoustingListener implements Listener {
         // Without jousting.use (default true) a lance is just an ordinary melee weapon.
         if (!damager.hasPermission("jousting.use")) return;
 
+        // Non-living targets (item frames, paintings, boats, minecarts, end crystals) are not
+        // jousting targets. Leave them to vanilla instead of cancelling below on cooldown or a
+        // broken lance, which would make them unbreakable from horseback.
+        if (!(event.getEntity() instanceof LivingEntity victim)) return;
+
         // Cooldown gate: no lance damage during cooldown.
         if (cooldowns.isOnCooldown(damager.getUniqueId())) { event.setCancelled(true); return; }
 
@@ -65,8 +71,6 @@ public class JoustingListener implements Listener {
 
         // Broken lance is decorative only: no damage, no cooldown.
         if (uses >= maxUses) { event.setCancelled(true); return; }
-
-        if (!(event.getEntity() instanceof LivingEntity victim)) return;
 
         // --- damage calculation -------------------------------------------------
         double momentum = MomentumTracker.getMomentumDistance(damager.getUniqueId());
@@ -204,7 +208,11 @@ public class JoustingListener implements Listener {
         dir.setY(0);
         if (dir.lengthSquared() == 0) dir = new Vector(0, 0, 1);
         dir.normalize().multiply(config.getKnockbackStrength()).setY(0.25);
-        victim.setVelocity(victim.getVelocity().add(dir));
+
+        // A passenger's position is driven by its vehicle, so velocity applied to a mounted
+        // player is discarded. Push whatever is actually carrying them.
+        Entity target = victim.getVehicle() != null ? victim.getVehicle() : victim;
+        target.setVelocity(target.getVelocity().add(dir));
     }
 
     private boolean shouldKnockoff(double momentum) {
