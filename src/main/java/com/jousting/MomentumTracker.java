@@ -41,9 +41,9 @@ public final class MomentumTracker {
         return data == null ? 0.0 : data.totalDistance;
     }
 
-    /** Fill fraction in [0,1] for UI, given the configured full-momentum distance. */
-    public static double getFraction(UUID playerUUID, double fullDistance) {
-        return HorseSpeedTier.momentumFraction(getMomentumDistance(playerUUID), fullDistance);
+    /** Fill fraction in [0,1] for UI, along the same ramp the damage curve uses. */
+    public static double getFraction(UUID playerUUID, double minDistance, double fullDistance) {
+        return HorseSpeedTier.momentumFraction(getMomentumDistance(playerUUID), minDistance, fullDistance);
     }
 
     public static boolean hasData(UUID playerUUID) {

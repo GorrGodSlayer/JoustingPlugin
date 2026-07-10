@@ -136,10 +136,24 @@ public final class JoustingConfig {
 
     /** Sanity-checks loaded values; clamps where safe and warns otherwise. */
     private void validate() {
+        // tierForSpeed tests ">= high" before ">= medium", so an inverted pair makes the MEDIUM
+        // tier unreachable and mis-classifies medium horses as FAST. Coerce rather than warn.
         if (mediumTierSpeedThreshold >= highTierSpeedThreshold) {
+            double corrected = mediumTierSpeedThreshold + 0.01;
             plugin.getLogger().warning("medium-tier-speed-threshold (" + mediumTierSpeedThreshold
-                    + ") should be less than high-tier-speed-threshold (" + highTierSpeedThreshold + ")");
+                    + ") must be less than high-tier-speed-threshold (" + highTierSpeedThreshold
+                    + "); using " + corrected);
+            highTierSpeedThreshold = corrected;
         }
+
+        // A max-uses of 0 makes "uses >= maxUses" true on the first swing, so every lance is
+        // born broken and the plugin silently does nothing.
+        lanceMaxUses = atLeastOne("lance-max-uses", lanceMaxUses);
+        lanceMaxUsesByMaterial.replaceAll(
+                (mat, uses) -> atLeastOne("lance-tiers." + mat + ".max-uses", uses));
+
+        // A negative strength inverts the knockback vector, pulling the target into the rider.
+        knockbackStrength = nonNegative("knockback-strength", knockbackStrength);
 
         knockoffChanceZeroMomentum = clampPercent("knockoff-chance-zero-momentum", knockoffChanceZeroMomentum);
         knockoffChanceFullMomentum = clampPercent("knockoff-chance-full-momentum", knockoffChanceFullMomentum);
@@ -179,6 +193,14 @@ public final class JoustingConfig {
         if (value < 0 || value > 100) {
             plugin.getLogger().warning(path + " (" + value + ") clamped to 0-100");
             return Math.max(0, Math.min(100, value));
+        }
+        return value;
+    }
+
+    private int atLeastOne(String path, int value) {
+        if (value < 1) {
+            plugin.getLogger().warning(path + " (" + value + ") must be >= 1; using 1");
+            return 1;
         }
         return value;
     }

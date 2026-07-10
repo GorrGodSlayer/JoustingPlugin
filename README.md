@@ -134,3 +134,11 @@ Build & test locally with `mvn clean verify`.
 - Need to test the lances against shields and against players 
 - Need to see if knockback/unmounting works
 - Need to see if i coded the lances properly
+
+## RECENT CHANGES
+
+1. Lance cooldown no longer cancels all melee dmg - being on cooldown, holding a broken lance or lacking momentum now just falls through the vanilla melee instead of cancelling the dmg even outright/ 
+2. Momentum boss bar now tracks the dmg curve - the bar glitched out into showing positive knockback when the actual damage increase was null
+3. Dismounting no longer resets lance cooldown 
+4. Config validation - couple bugs returning lance dur to 0 breaking every lance upon mounting 
+5. Armor stands no longer a valid target 

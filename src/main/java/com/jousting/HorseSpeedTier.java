@@ -59,15 +59,21 @@ public final class HorseSpeedTier {
      */
     public static double calculateDamage(double momentum, double minDistance,
                                          double fullDistance, double maxDamage) {
-        if (momentum < minDistance) return 0.0;
-        double span = Math.max(0.0001, fullDistance - minDistance);
-        double fraction = Math.min((momentum - minDistance) / span, 1.0);
-        return maxDamage * fraction;
+        return maxDamage * momentumFraction(momentum, minDistance, fullDistance);
     }
 
-    /** Momentum fill fraction (0..1) for the BossBar. */
-    public static double momentumFraction(double momentum, double fullDistance) {
-        if (fullDistance <= 0) return 0.0;
-        return Math.max(0.0, Math.min(momentum / fullDistance, 1.0));
+    /**
+     * Momentum fill fraction (0..1) along the damage ramp: 0 at or below
+     * {@code minDistance}, 1 at or above {@code fullDistance}.
+     *
+     * <p>The BossBar, the knockoff chance and the damage curve all read from this, so a
+     * bar at 0% means exactly "this hit deals no damage" rather than "the rider has not
+     * moved". Normalizing over {@code 0..fullDistance} instead would show a third of a
+     * bar at the point where hits are still cancelled for lack of momentum.
+     */
+    public static double momentumFraction(double momentum, double minDistance, double fullDistance) {
+        if (momentum < minDistance) return 0.0;
+        double span = Math.max(0.0001, fullDistance - minDistance);
+        return Math.max(0.0, Math.min((momentum - minDistance) / span, 1.0));
     }
 }

@@ -69,14 +69,19 @@ class HorseSpeedTierTest {
 
     @Test
     void momentumFractionClamped() {
-        assertEquals(0.0, HorseSpeedTier.momentumFraction(0, 15.0), 1e-9);
-        assertEquals(0.5, HorseSpeedTier.momentumFraction(7.5, 15.0), 1e-9);
-        assertEquals(1.0, HorseSpeedTier.momentumFraction(100, 15.0), 1e-9);
+        assertEquals(0.0, HorseSpeedTier.momentumFraction(0, 5.0, 15.0), 1e-9);
+        assertEquals(0.0, HorseSpeedTier.momentumFraction(5.0, 5.0, 15.0), 1e-9);
+        assertEquals(0.5, HorseSpeedTier.momentumFraction(10.0, 5.0, 15.0), 1e-9);
+        assertEquals(1.0, HorseSpeedTier.momentumFraction(100, 5.0, 15.0), 1e-9);
     }
 
+    /** The BossBar and the damage curve must agree, or the bar shows charge on a dud hit. */
     @Test
-    void mediumTierCapStrictlyBetweenSlowAndFast() {
-        double slow = 3.0, medium = 5.0, fast = 6.0;
-        assertTrue(slow < medium && medium < fast);
+    void momentumFractionMatchesTheDamageRamp() {
+        for (double m = 0.0; m <= 20.0; m += 0.5) {
+            double expected = HorseSpeedTier.calculateDamage(m, 5.0, 15.0, 6.0) / 6.0;
+            assertEquals(expected, HorseSpeedTier.momentumFraction(m, 5.0, 15.0), 1e-9,
+                    "bar fraction diverged from damage fraction at momentum " + m);
+        }
     }
 }

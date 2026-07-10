@@ -61,6 +61,7 @@ public class MomentumTask extends BukkitRunnable {
 
             LanceTier tier = LanceTier.fromMaterial(player.getInventory().getItemInMainHand().getType());
             double full = config.getFullMomentumDistance();
+            double min = config.getMinimumMomentumDistance();
 
             if (moved >= config.getMinimumRunSpeed()) {
                 MomentumTracker.addDistanceCapped(id, moved, full); // grow, capped at "full"
@@ -68,7 +69,7 @@ public class MomentumTask extends BukkitRunnable {
                 MomentumTracker.decay(id, config.getMomentumDecayPerTick()); // bleed down when slow
             }
 
-            barManager.update(player, MomentumTracker.getFraction(id, full), tier);
+            barManager.update(player, MomentumTracker.getFraction(id, min, full), tier);
         }
     }
 

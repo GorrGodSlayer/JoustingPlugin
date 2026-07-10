@@ -2,6 +2,7 @@ package com.jousting;
 
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Horse;
 import org.bukkit.entity.LivingEntity;
@@ -58,19 +59,24 @@ public class JoustingListener implements Listener {
         if (!damager.hasPermission("jousting.use")) return;
 
         // Non-living targets (item frames, paintings, boats, minecarts, end crystals) are not
-        // jousting targets. Leave them to vanilla instead of cancelling below on cooldown or a
-        // broken lance, which would make them unbreakable from horseback.
+        // jousting targets. Neither are armour stands, which are LivingEntity but would
+        // otherwise burn a lance use and start a cooldown when tapped. Leave them to vanilla.
         if (!(event.getEntity() instanceof LivingEntity victim)) return;
+        if (victim instanceof ArmorStand) return;
+
+        // Below this point every early exit returns WITHOUT cancelling. Cancelling would strip
+        // the vanilla melee damage too, leaving the spear inert against everything for the
+        // whole cooldown; only the lance charge is suppressed, not the ordinary swing.
 
         // Cooldown gate: no lance damage during cooldown.
-        if (cooldowns.isOnCooldown(damager.getUniqueId())) { event.setCancelled(true); return; }
+        if (cooldowns.isOnCooldown(damager.getUniqueId())) return;
 
         LanceTier tier = LanceTier.fromMaterial(mainHand.getType());
         int maxUses = config.getLanceMaxUses(mainHand.getType());
         int uses = lances.getUses(mainHand);
 
-        // Broken lance is decorative only: no damage, no cooldown.
-        if (uses >= maxUses) { event.setCancelled(true); return; }
+        // Broken lance is decorative only: no charge damage, no cooldown.
+        if (uses >= maxUses) return;
 
         // --- damage calculation -------------------------------------------------
         double momentum = MomentumTracker.getMomentumDistance(damager.getUniqueId());
@@ -82,8 +88,8 @@ public class JoustingListener implements Listener {
                 speedCap + config.getLanceDamageBonus(mainHand.getType()));
 
         if (base <= 0) {
-            // Not enough momentum to land a real strike; cancel, no use consumed, no cooldown.
-            event.setCancelled(true);
+            // Not enough momentum to land a charge; fall through to vanilla melee.
+            // No use consumed, no cooldown.
             return;
         }
 
@@ -122,7 +128,8 @@ public class JoustingListener implements Listener {
         applyKnockback(damager, victim);
 
         if (config.isDebugDamage()) {
-            double frac = HorseSpeedTier.momentumFraction(momentum, config.getFullMomentumDistance());
+            double frac = HorseSpeedTier.momentumFraction(momentum,
+                    config.getMinimumMomentumDistance(), config.getFullMomentumDistance());
             damager.sendMessage("§e[Joust] §f" + String.format("%.1f", damage) + " hearts §7| momentum "
                     + (int) Math.round(frac * 100) + "% | horse " + HorseSpeedTier.tierOf(horse, config)
                     + " | lance " + (tier == null ? "?" : tier.name()));
@@ -148,7 +155,8 @@ public class JoustingListener implements Listener {
         if (event.getExited() instanceof Player player) {
             MomentumTracker.resetMomentum(player.getUniqueId());
             barManager.remove(player.getUniqueId());
-            cooldowns.clear(player.getUniqueId());
+            // Deliberately NOT clearing the cooldown: dismount/remount would reset it and
+            // bypass lance-cooldown-ms entirely. It expires on its own, and onQuit clears it.
         }
     }
 
@@ -216,18 +224,11 @@ public class JoustingListener implements Listener {
     }
 
     private boolean shouldKnockoff(double momentum) {
-        double minDistance = config.getMinimumMomentumDistance();
-        double fullDistance = config.getFullMomentumDistance();
-        int chance;
-        if (momentum < minDistance) {
-            chance = config.getKnockoffChanceZeroMomentum();
-        } else {
-            double span = Math.max(0.0001, fullDistance - minDistance);
-            double normalized = Math.min((momentum - minDistance) / span, 1.0);
-            double zero = config.getKnockoffChanceZeroMomentum();
-            double full = config.getKnockoffChanceFullMomentum();
-            chance = (int) Math.round(zero + (full - zero) * normalized);
-        }
+        double normalized = HorseSpeedTier.momentumFraction(momentum,
+                config.getMinimumMomentumDistance(), config.getFullMomentumDistance());
+        double zero = config.getKnockoffChanceZeroMomentum();
+        double full = config.getKnockoffChanceFullMomentum();
+        int chance = (int) Math.round(zero + (full - zero) * normalized);
         return random.nextInt(100) < chance;
     }
 
