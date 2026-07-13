@@ -36,13 +36,6 @@ public class CooldownManager {
         return true;
     }
 
-    /** Milliseconds remaining, or 0 if not on cooldown. */
-    public long remaining(UUID uuid) {
-        Long until = cooldownUntil.get(uuid);
-        if (until == null) return 0L;
-        return Math.max(0L, until - clock.getAsLong());
-    }
-
     public void clear(UUID uuid) {
         cooldownUntil.remove(uuid);
     }

@@ -5,6 +5,7 @@ api-version: 1.21
 description: Horse combat system with lance tiers, durability, momentum, shields, and jousting/PvP modes
 authors:
   - k4nefr-cmd
+  - GorrGodSlayer
 commands:
   jousting:
     description: Jousting plugin commands

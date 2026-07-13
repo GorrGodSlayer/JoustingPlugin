@@ -12,40 +12,27 @@ import java.util.List;
 
 /**
  * Builds and inspects lance items. Remaining uses are stored in the item's
- * PersistentDataContainer under "lance_uses", and a "lance" byte tag marks the item
- * as plugin-issued so it can be told apart from an ordinary crafted spear
- * (see {@link #isLance(ItemStack)}).
+ * PersistentDataContainer under "lance_uses". Combat identifies lances purely by
+ * material (any configured spear counts), so plugin-issued and crafted spears
+ * behave identically.
  */
 public class LanceItems {
     private final NamespacedKey usesKey;
-    private final NamespacedKey lanceKey;
 
     public LanceItems(Plugin plugin) {
         this.usesKey = new NamespacedKey(plugin, "lance_uses");
-        this.lanceKey = new NamespacedKey(plugin, "lance");
     }
-
-    public NamespacedKey getUsesKey() { return usesKey; }
 
     /** Create a fresh lance for the given tier. */
     public ItemStack create(LanceTier tier, JoustingConfig config) {
         ItemStack item = new ItemStack(tier.getMaterial());
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.getPersistentDataContainer().set(lanceKey, PersistentDataType.BYTE, (byte) 1);
             meta.getPersistentDataContainer().set(usesKey, PersistentDataType.INTEGER, 0);
             applyDisplay(meta, tier, 0, config.getLanceMaxUses(tier.getMaterial()));
             item.setItemMeta(meta);
         }
         return item;
-    }
-
-    /** True if the item carries the plugin-issued lance marker. */
-    public boolean isLance(ItemStack item) {
-        if (item == null) return false;
-        ItemMeta meta = item.getItemMeta();
-        if (meta == null) return false;
-        return meta.getPersistentDataContainer().has(lanceKey, PersistentDataType.BYTE);
     }
 
     public int getUses(ItemStack item) {
@@ -68,10 +55,6 @@ public class LanceItems {
             applyDisplay(meta, tier, uses, maxUses);
         }
         item.setItemMeta(meta);
-    }
-
-    public boolean isBroken(ItemStack item, int maxUses) {
-        return getUses(item) >= maxUses;
     }
 
     private void applyDisplay(ItemMeta meta, LanceTier tier, int uses, int maxUses) {

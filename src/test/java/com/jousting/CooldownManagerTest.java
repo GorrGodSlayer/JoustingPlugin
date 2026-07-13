@@ -24,11 +24,9 @@ class CooldownManagerTest {
 
         clock.now = 1499;
         assertTrue(cd.isOnCooldown(id));
-        assertEquals(1, cd.remaining(id));
 
         clock.now = 1500;
         assertFalse(cd.isOnCooldown(id), "cooldown ends exactly at expiry");
-        assertEquals(0, cd.remaining(id));
     }
 
     @Test
@@ -45,7 +43,6 @@ class CooldownManagerTest {
 
         cd.start(id, 0);
         assertFalse(cd.isOnCooldown(id));
-        assertEquals(0, cd.remaining(id));
     }
 
     @Test
@@ -61,7 +58,6 @@ class CooldownManagerTest {
         clock.now = 1500;
         assertFalse(cd.isOnCooldown(a), "a expired at 1000");
         assertTrue(cd.isOnCooldown(b), "b still cooling until 2000");
-        assertEquals(500, cd.remaining(b));
 
         cd.clear(b);
         assertFalse(cd.isOnCooldown(b));

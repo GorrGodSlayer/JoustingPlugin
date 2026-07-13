@@ -2,6 +2,7 @@ package com.jousting;
 
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Horse;
@@ -83,7 +84,12 @@ public class JoustingListener implements Listener {
         // Sharpness/Strength are ignored on purpose so buffs can't inflate a charge.
         double damage = DamageCalculator.clamp(base, config.getFinalDamageHardCap());
 
-        boolean blocked = victim instanceof Player vp && vp.isBlocking();
+        // A raised shield only blocks hits from the victim's frontal arc, like vanilla:
+        // a lance in the back goes through.
+        boolean blocked = victim instanceof Player vp && vp.isBlocking()
+                && DamageCalculator.isFrontalHit(vp.getLocation().getYaw(),
+                        damager.getLocation().getX() - vp.getLocation().getX(),
+                        damager.getLocation().getZ() - vp.getLocation().getZ());
         if (blocked) {
             event.setCancelled(true); // shield absorbs; no health damage
             Player target = (Player) victim;
@@ -105,7 +111,7 @@ public class JoustingListener implements Listener {
         // Set the damage on this event rather than calling victim.damage(), which would re-fire
         // EntityDamageByEntityEvent and recurse. Config is in hearts; Minecraft uses half-hearts.
         event.setDamage(damage * 2.0);
-        playSound(damager, config.getHitSound());
+        playSound(victim, config.getHitSound());
         applyKnockback(damager, victim);
 
         if (config.isDebugDamage()) {
@@ -120,7 +126,7 @@ public class JoustingListener implements Listener {
         boolean joustMode = victim instanceof Player tp && tp.getVehicle() instanceof Horse;
         if (joustMode && shouldKnockoff(momentum)) {
             victim.leaveVehicle();
-            playSound(damager, config.getKnockoffSound());
+            playSound(victim, config.getKnockoffSound());
         }
 
         consumeUse(mainHand, uses, tier, maxUses);
@@ -134,6 +140,7 @@ public class JoustingListener implements Listener {
         if (event.getExited() instanceof Player player) {
             MomentumTracker.resetMomentum(player.getUniqueId());
             barManager.remove(player.getUniqueId());
+            plugin.getMomentumTask().forget(player.getUniqueId());
             // cooldown is left to expire, so remounting can't reset it
         }
     }
@@ -172,9 +179,15 @@ public class JoustingListener implements Listener {
         if (shield == null) return false;
         ItemMeta meta = shield.getItemMeta();
         if (!(meta instanceof Damageable dmg)) return false;
+        if (meta.isUnbreakable()) return false; // still blocks, but never wears or breaks
+
+        int loss = DamageCalculator.shieldDurabilityLoss(
+                config.getShieldDurabilityDamage(),
+                shield.getEnchantmentLevel(Enchantment.UNBREAKING));
+        if (loss <= 0) return false;
 
         int max = shield.getType().getMaxDurability();
-        int newDamage = dmg.getDamage() + config.getShieldDurabilityDamage();
+        int newDamage = dmg.getDamage() + loss;
         boolean broke = max > 0 && newDamage >= max;
         if (broke) {
             shield.setAmount(0);
@@ -212,8 +225,9 @@ public class JoustingListener implements Listener {
         return random.nextInt(100) < chance;
     }
 
-    private void playSound(Player player, Sound sound) {
+    // Sounds play where the impact happened (the victim), so bystanders hear the joust.
+    private void playSound(LivingEntity at, Sound sound) {
         if (sound == null) return; // invalid key already warned about at config load
-        player.getWorld().playSound(player.getLocation(), sound, 1.0f, 1.0f);
+        at.getWorld().playSound(at.getLocation(), sound, 1.0f, 1.0f);
     }
 }

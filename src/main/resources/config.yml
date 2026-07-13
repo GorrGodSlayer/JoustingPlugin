@@ -49,6 +49,9 @@ high-tier-max-damage: 6.0
 # Below this, momentum bleeds away at momentum-decay-per-tick (prevents running in place).
 minimum-run-speed: 0.15
 
+# Momentum is bounded by straight-line displacement from where the charge began,
+# so circling a target can't build a full charge — only an actual run-up can.
+
 # Minimum distance (blocks) travelled before any damage is dealt.
 minimum-momentum-distance: 5.0
 
@@ -65,8 +68,11 @@ momentum-decay-per-tick: 0.5
 final-damage-hard-cap: 9.0
 
 # --- Shield interaction -----------------------------------------
+# A raised shield only blocks lance hits from the victim's frontal 180-degree arc
+# (like vanilla); hits from behind go through. Unbreakable shields never wear, and
+# Unbreaking reduces durability loss.
 shield:
-  # Durability removed from the blocking shield per lance hit.
+  # Durability removed from the blocking shield per lance hit (before Unbreaking).
   durability-damage: 50
   # Whether a blocked hit puts the lance on cooldown.
   cooldown-on-block: true

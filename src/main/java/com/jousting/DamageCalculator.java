@@ -18,4 +18,30 @@ public final class DamageCalculator {
         if (base < 0) return 0.0;
         return Math.min(base, hardCap);
     }
+
+    /**
+     * Whether an attack from the given relative position lands in the victim's frontal
+     * 180-degree arc — a raised shield only blocks these, matching vanilla.
+     *
+     * @param victimYaw Bukkit yaw of the victim in degrees (0 = +Z/south, 90 = -X/west)
+     * @param dx        attacker X minus victim X
+     * @param dz        attacker Z minus victim Z
+     */
+    public static boolean isFrontalHit(double victimYaw, double dx, double dz) {
+        double yawRad = Math.toRadians(victimYaw);
+        double fx = -Math.sin(yawRad);
+        double fz = Math.cos(yawRad);
+        return fx * dx + fz * dz > 0;
+    }
+
+    /**
+     * Durability points actually removed from a shield, honouring Unbreaking:
+     * vanilla gives each point a 1/(level+1) chance to apply, so we scale the
+     * batch deterministically. Never less than 1 while any damage is configured.
+     */
+    public static int shieldDurabilityLoss(int configuredDamage, int unbreakingLevel) {
+        if (configuredDamage <= 0) return 0;
+        int level = Math.max(0, unbreakingLevel);
+        return Math.max(1, (int) Math.round(configuredDamage / (level + 1.0)));
+    }
 }

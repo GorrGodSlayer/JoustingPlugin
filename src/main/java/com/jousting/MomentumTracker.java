@@ -13,18 +13,29 @@ public final class MomentumTracker {
 
     private MomentumTracker() {}
 
-    /** Add a movement delta (blocks) to the player's momentum total. */
-    public static void addDistance(UUID playerUUID, double distance) {
+    /** Overwrite the player's momentum with an already-computed value; clears at zero. */
+    public static void setDistance(UUID playerUUID, double distance) {
+        if (distance <= 0) {
+            momentumData.remove(playerUUID);
+            return;
+        }
         PlayerMomentum data = momentumData.getOrDefault(playerUUID, new PlayerMomentum());
-        data.totalDistance += distance;
+        data.totalDistance = distance;
         momentumData.put(playerUUID, data);
     }
 
-    /** Add movement but never exceed {@code cap}, so momentum reflects the current charge. */
-    public static void addDistanceCapped(UUID playerUUID, double distance, double cap) {
-        PlayerMomentum data = momentumData.getOrDefault(playerUUID, new PlayerMomentum());
-        data.totalDistance = Math.min(data.totalDistance + distance, cap);
-        momentumData.put(playerUUID, data);
+    /**
+     * Momentum after one tick of movement. Growth is limited by how far the horse actually
+     * moved this tick AND by net displacement from the charge's start point, so riding in
+     * circles around a target can never build a full charge — only a straight(ish) run can.
+     *
+     * @param current      momentum before this tick (blocks)
+     * @param moved        distance moved this tick (blocks)
+     * @param displacement straight-line distance from the charge anchor (blocks)
+     * @param cap          full-momentum distance
+     */
+    public static double chargeMomentum(double current, double moved, double displacement, double cap) {
+        return Math.max(0.0, Math.min(Math.min(current + moved, displacement), cap));
     }
 
     /** Bleed momentum down by {@code amount} (blocks); clears the entry at zero. */
@@ -44,10 +55,6 @@ public final class MomentumTracker {
     /** Fill fraction in [0,1] for UI, along the same ramp the damage curve uses. */
     public static double getFraction(UUID playerUUID, double minDistance, double fullDistance) {
         return HorseSpeedTier.momentumFraction(getMomentumDistance(playerUUID), minDistance, fullDistance);
-    }
-
-    public static boolean hasData(UUID playerUUID) {
-        return momentumData.containsKey(playerUUID);
     }
 
     public static void resetMomentum(UUID playerUUID) {

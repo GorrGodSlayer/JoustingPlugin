@@ -58,6 +58,12 @@ public class JoustingCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("§cThis server version doesn't have the " + tier.getDisplayName() + " spear item.");
                 return true;
             }
+            // A tier can be removed from lance-tiers in config; the item would then be
+            // an ordinary spear in combat, so say so instead of confusing the player.
+            if (!config.isLanceItem(tier.getMaterial())) {
+                sender.sendMessage("§e" + tier.getMaterial() + " isn't in lance-tiers in config.yml — "
+                        + "this lance will deal no jousting damage until it's added back.");
+            }
             ItemStack lance = lances.create(tier, config);
             // Inventory full: drop it at their feet instead of silently voiding it.
             if (!player.getInventory().addItem(lance).isEmpty()) {
