@@ -32,6 +32,7 @@ public final class JoustingConfig {
 
     // Momentum
     private double minimumRunSpeed;
+    private double momentumGainMultiplier;
     private double minimumMomentumDistance;
     private double fullMomentumDistance;
     private double momentumDecayPerTick;
@@ -98,6 +99,7 @@ public final class JoustingConfig {
 
         // Momentum
         this.minimumRunSpeed = config.getDouble("minimum-run-speed", 0.15);
+        this.momentumGainMultiplier = config.getDouble("momentum-gain-multiplier", 0.5);
         this.minimumMomentumDistance = config.getDouble("minimum-momentum-distance", 5.0);
         this.fullMomentumDistance = config.getDouble("full-momentum-distance", 15.0);
         this.momentumDecayPerTick = config.getDouble("momentum-decay-per-tick", 0.5);
@@ -113,7 +115,7 @@ public final class JoustingConfig {
 
         // Knockoff / knockback
         this.knockoffChanceZeroMomentum = config.getInt("knockoff-chance-zero-momentum", 5);
-        this.knockoffChanceFullMomentum = config.getInt("knockoff-chance-full-momentum", 70);
+        this.knockoffChanceFullMomentum = config.getInt("knockoff-chance-full-momentum", 20);
         this.knockbackStrength = config.getDouble("knockback-strength", 0.5);
 
         // Sounds
@@ -163,6 +165,7 @@ public final class JoustingConfig {
 
         // negatives here would build momentum while standing still, or never let it bleed off
         minimumRunSpeed = nonNegative("minimum-run-speed", minimumRunSpeed);
+        momentumGainMultiplier = nonNegative("momentum-gain-multiplier", momentumGainMultiplier);
         momentumDecayPerTick = nonNegative("momentum-decay-per-tick", momentumDecayPerTick);
 
         minimumMomentumDistance = nonNegative("minimum-momentum-distance", minimumMomentumDistance);
@@ -220,6 +223,7 @@ public final class JoustingConfig {
     public double getHighTierMaxDamage() { return highTierMaxDamage; }
 
     public double getMinimumRunSpeed() { return minimumRunSpeed; }
+    public double getMomentumGainMultiplier() { return momentumGainMultiplier; }
     public double getMinimumMomentumDistance() { return minimumMomentumDistance; }
     public double getFullMomentumDistance() { return fullMomentumDistance; }
     public double getMomentumDecayPerTick() { return momentumDecayPerTick; }

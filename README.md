@@ -15,7 +15,7 @@ A Minecraft Paper 1.21.11 plugin that adds a complete jousting system with lance
 
 💥 **Knockoff Mechanics** - Chance to knock riders off horses
   - 5% at zero momentum
-  - 70% at full momentum
+  - 20% at full momentum
   - Scales smoothly between
 
 🛡️ **Shields** - A raised shield blocks a lance hit from the victim's frontal arc (hits from behind go through, like vanilla). Blocking costs shield durability (Unbreaking reduces it, unbreakable shields never wear) and can still knock the blocker back.
@@ -75,6 +75,7 @@ high-tier-max-damage: 6.0
 
 # Momentum
 minimum-run-speed: 0.15          # blocks/tick needed to keep building momentum
+momentum-gain-multiplier: 0.5    # fraction of movement credited (0.5 = 2x slower recharge)
 minimum-momentum-distance: 5.0   # below this, a hit deals no lance damage
 full-momentum-distance: 15.0     # at this, momentum (and the bar) is full
 momentum-decay-per-tick: 0.5     # bleed rate when the horse slows down
@@ -90,7 +91,7 @@ shield:
 
 # Knockoff probabilities (percent)
 knockoff-chance-zero-momentum: 5
-knockoff-chance-full-momentum: 70
+knockoff-chance-full-momentum: 20
 
 # Knockback strength
 knockback-strength: 0.5
@@ -124,7 +125,7 @@ debug-damage: false
 3. **Hit another player** with your lance
 4. **Damage scales** with momentum, horse speed tier, and lance tier
 5. **Shields block** frontal hits (durability cost); hits from behind go through
-6. **Chance to knockoff** a mounted target, scaling from 5% to 70%
+6. **Chance to knockoff** a mounted target, scaling from 5% to 20%
 7. **Momentum resets** after each hit
 
 ## Requirements
@@ -158,6 +159,15 @@ Implemented by GorrGodSlayer
 Build & test locally with `mvn clean verify`.
 
 ## RECENT CHANGES
+
+### 2026-07-14 (balance pass)
+
+0. **Root-cause fix:** 1.21.11 spears attack with their own `SPEAR` damage type, not `ENTITY_ATTACK`, so the jousting handler never fired in-game — no momentum-scaled damage, no momentum reset, and the vanilla spear's built-in dismount ran unchecked (why knockoff felt like 100%). The handler now accepts spear and melee damage types, and the vanilla dismount is suppressed so the plugin's knockoff roll is the only thing that unseats a rider.
+1. Near-miss reset: galloping past a player who comes within 0.5 blocks of the horse without being hit spends the charge — a whiffed pass can't wheel around at full momentum
+1a. Momentum recharges 2× slower: new `momentum-gain-multiplier` (default 0.5) credits only half of each block ridden (applies even on servers with an older config.yml, since the key defaults when absent)
+2. Broken lances are now truly unusable: any attack with a spent lance is cancelled outright (previously it fell through to vanilla melee damage)
+2. Default full-momentum knockoff chance lowered from 70% to 20% (existing servers: update `knockoff-chance-full-momentum` in their config.yml by hand — the plugin won't overwrite it)
+3. Momentum no longer builds (and the bar no longer shows) while riding an untamed horse
 
 ### 2026-07-14
 

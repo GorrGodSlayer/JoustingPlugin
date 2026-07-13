@@ -2,6 +2,7 @@ package com.jousting;
 
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.damage.DamageType;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
@@ -13,6 +14,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDismountEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.vehicle.VehicleExitEvent;
 import org.bukkit.inventory.EquipmentSlot;
@@ -21,7 +23,12 @@ import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.util.Vector;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
+import java.util.UUID;
 
 public class JoustingListener implements Listener {
     private final JoustingPlugin plugin;
@@ -30,6 +37,13 @@ public class JoustingListener implements Listener {
     private final CooldownManager cooldowns;
     private final LanceItems lances;
     private final Random random = new Random();
+
+    // Vanilla spears dismount riders on their own; we suppress that so the momentum-based
+    // knockoff roll is the only thing that can unseat a jousting target. Victims of a lance
+    // hit are marked here briefly, and dismounts we approved are let through.
+    private static final long DISMOUNT_SUPPRESS_WINDOW_MS = 100;
+    private final Map<UUID, Long> suppressVanillaDismount = new HashMap<>();
+    private final Set<UUID> approvedKnockoffs = new HashSet<>();
 
     public JoustingListener(JoustingPlugin plugin, JoustingConfig config,
                             MomentumBarManager barManager, CooldownManager cooldowns,
@@ -47,13 +61,27 @@ public class JoustingListener implements Listener {
     // burn a lance use and start the cooldown for a hit they then deny.
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
-        // Thorns and sweep damage also arrive as ENTITY_ATTACK from the rider; ignore them.
-        if (event.getCause() != EntityDamageEvent.DamageCause.ENTITY_ATTACK) return;
+        // 1.21.11 spears hit with their own SPEAR damage type (the mounted charge), not
+        // plain ENTITY_ATTACK — gating on cause alone silently skipped every real joust hit.
+        // Accept both spear and ordinary melee, and reject sweeps/thorns/indirect damage.
+        DamageType type = event.getDamageSource().getDamageType();
+        if (type != DamageType.SPEAR && type != DamageType.PLAYER_ATTACK) return;
+        if (event.getCause() == EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK) return;
         if (!(event.getDamager() instanceof Player damager)) return;
-        if (!(damager.getVehicle() instanceof Horse horse)) return;
 
         ItemStack mainHand = damager.getInventory().getItemInMainHand();
         if (!config.isLanceItem(mainHand.getType())) return;
+
+        // A spent lance is decorative: it deals no damage at all, mounted or not.
+        // Checked before the mount/permission gates so it can't fall through to vanilla melee.
+        int maxUses = config.getLanceMaxUses(mainHand.getType());
+        int uses = lances.getUses(mainHand);
+        if (uses >= maxUses) {
+            event.setCancelled(true);
+            return;
+        }
+
+        if (!(damager.getVehicle() instanceof Horse horse)) return;
         // Without jousting.use (default true) a lance is just an ordinary melee weapon.
         if (!damager.hasPermission("jousting.use")) return;
 
@@ -61,14 +89,18 @@ public class JoustingListener implements Listener {
         if (!(event.getEntity() instanceof LivingEntity victim)) return;
         if (victim instanceof ArmorStand) return;
 
+        // Every lance hit on a mounted target suppresses the spear's built-in dismount,
+        // including hits that fall through to vanilla melee below (cooldown, no momentum) —
+        // otherwise vanilla unseats the rider on every tap regardless of our knockoff roll.
+        if (victim.getVehicle() instanceof Horse) {
+            suppressVanillaDismount.put(victim.getUniqueId(), System.currentTimeMillis());
+        }
+
         // The early returns below don't cancel: the ordinary melee swing still lands, only the
         // lance charge is withheld.
         if (cooldowns.isOnCooldown(damager.getUniqueId())) return;
 
         LanceTier tier = LanceTier.fromMaterial(mainHand.getType());
-        int maxUses = config.getLanceMaxUses(mainHand.getType());
-        int uses = lances.getUses(mainHand);
-        if (uses >= maxUses) return; // broken lance: cosmetic only
 
         // --- damage calculation -------------------------------------------------
         double momentum = MomentumTracker.getMomentumDistance(damager.getUniqueId());
@@ -125,6 +157,7 @@ public class JoustingListener implements Listener {
         // JOUSTING mode (mounted vs mounted) only: chance to dismount.
         boolean joustMode = victim instanceof Player tp && tp.getVehicle() instanceof Horse;
         if (joustMode && shouldKnockoff(momentum)) {
+            approvedKnockoffs.add(victim.getUniqueId());
             victim.leaveVehicle();
             playSound(victim, config.getKnockoffSound());
         }
@@ -133,6 +166,16 @@ public class JoustingListener implements Listener {
         cooldowns.start(damager.getUniqueId(), config.getLanceCooldownMs());
         MomentumTracker.resetMomentum(damager.getUniqueId());
         barManager.update(damager, 0.0, tier);
+    }
+
+    @EventHandler
+    public void onDismount(EntityDismountEvent event) {
+        UUID id = event.getEntity().getUniqueId();
+        if (approvedKnockoffs.remove(id)) return; // our knockoff roll: let it through
+        Long hitAt = suppressVanillaDismount.remove(id);
+        if (hitAt != null && System.currentTimeMillis() - hitAt <= DISMOUNT_SUPPRESS_WINDOW_MS) {
+            event.setCancelled(true); // vanilla spear dismount: the roll said no
+        }
     }
 
     @EventHandler
@@ -152,6 +195,8 @@ public class JoustingListener implements Listener {
         barManager.remove(player.getUniqueId());
         cooldowns.clear(player.getUniqueId());
         plugin.getMomentumTask().forget(player.getUniqueId());
+        suppressVanillaDismount.remove(player.getUniqueId());
+        approvedKnockoffs.remove(player.getUniqueId());
     }
 
     // ---------------------------------------------------------------- helpers
