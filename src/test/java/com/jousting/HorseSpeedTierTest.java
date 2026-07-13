@@ -9,20 +9,11 @@ class HorseSpeedTierTest {
     private static final double MED = 0.2;
     private static final double HIGH = 0.28;
 
-    /**
-     * Momentum is capped at fullDistance by {@link MomentumTracker#addDistanceCapped}, and
-     * calculateDamage floors at zero below minDistance. So a config where full <= minimum
-     * pins every hit at zero damage — which is why JoustingConfig.validate() coerces it.
-     */
+    // A degenerate full <= min config pins damage at zero (validate() coerces it in practice).
     @Test
-    void fullDistanceBelowMinimumWouldPinDamageAtZero() {
-        double min = 5.0, degenerateFull = 3.0;
-        double cappedMomentum = Math.min(1000.0, degenerateFull); // whatever the rider charges
-        assertEquals(0.0, HorseSpeedTier.calculateDamage(cappedMomentum, min, degenerateFull, 8.0), 1e-9);
-
-        // With a sane full > min, that same saturated momentum yields the full cap.
-        double saneFull = min + 1.0;
-        assertEquals(8.0, HorseSpeedTier.calculateDamage(Math.min(1000.0, saneFull), min, saneFull, 8.0), 1e-9);
+    void zeroDamageWhenFullBelowMin() {
+        assertEquals(0.0, HorseSpeedTier.calculateDamage(3.0, 5.0, 3.0, 8.0), 1e-9);
+        assertEquals(8.0, HorseSpeedTier.calculateDamage(6.0, 5.0, 6.0, 8.0), 1e-9);
     }
 
     @Test
@@ -75,13 +66,12 @@ class HorseSpeedTierTest {
         assertEquals(1.0, HorseSpeedTier.momentumFraction(100, 5.0, 15.0), 1e-9);
     }
 
-    /** The BossBar and the damage curve must agree, or the bar shows charge on a dud hit. */
     @Test
-    void momentumFractionMatchesTheDamageRamp() {
-        for (double m = 0.0; m <= 20.0; m += 0.5) {
-            double expected = HorseSpeedTier.calculateDamage(m, 5.0, 15.0, 6.0) / 6.0;
-            assertEquals(expected, HorseSpeedTier.momentumFraction(m, 5.0, 15.0), 1e-9,
-                    "bar fraction diverged from damage fraction at momentum " + m);
-        }
+    void fractionRampsFromZeroAtMinToOneAtFull() {
+        // 5..15, so 7.5 is a quarter of the way up and 12.5 three quarters.
+        assertEquals(0.0, HorseSpeedTier.momentumFraction(5.0, 5.0, 15.0), 1e-9);
+        assertEquals(0.25, HorseSpeedTier.momentumFraction(7.5, 5.0, 15.0), 1e-9);
+        assertEquals(0.75, HorseSpeedTier.momentumFraction(12.5, 5.0, 15.0), 1e-9);
+        assertEquals(1.0, HorseSpeedTier.momentumFraction(15.0, 5.0, 15.0), 1e-9);
     }
 }

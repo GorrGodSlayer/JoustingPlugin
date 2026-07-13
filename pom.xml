@@ -10,7 +10,7 @@
     <packaging>jar</packaging>
 
     <name>JoustingPlugin</name>
-    <description>A Jousting Plugin for Paper Minecraft 26.2+</description>
+    <description>A jousting / horse-combat plugin for Paper 1.21.11</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

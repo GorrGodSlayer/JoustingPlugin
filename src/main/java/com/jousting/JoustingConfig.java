@@ -101,7 +101,7 @@ public final class JoustingConfig {
         this.minimumMomentumDistance = config.getDouble("minimum-momentum-distance", 5.0);
         this.fullMomentumDistance = config.getDouble("full-momentum-distance", 15.0);
         this.momentumDecayPerTick = config.getDouble("momentum-decay-per-tick", 0.5);
-        this.debugDamage = config.getBoolean("debug-damage", true);
+        this.debugDamage = config.getBoolean("debug-damage", false);
 
         // Balancing
         this.finalDamageHardCap = config.getDouble("final-damage-hard-cap", 9.0);
@@ -136,8 +136,7 @@ public final class JoustingConfig {
 
     /** Sanity-checks loaded values; clamps where safe and warns otherwise. */
     private void validate() {
-        // tierForSpeed tests ">= high" before ">= medium", so an inverted pair makes the MEDIUM
-        // tier unreachable and mis-classifies medium horses as FAST. Coerce rather than warn.
+        // If medium >= high the MEDIUM tier becomes unreachable, so nudge high above medium.
         if (mediumTierSpeedThreshold >= highTierSpeedThreshold) {
             double corrected = mediumTierSpeedThreshold + 0.01;
             plugin.getLogger().warning("medium-tier-speed-threshold (" + mediumTierSpeedThreshold
@@ -146,13 +145,12 @@ public final class JoustingConfig {
             highTierSpeedThreshold = corrected;
         }
 
-        // A max-uses of 0 makes "uses >= maxUses" true on the first swing, so every lance is
-        // born broken and the plugin silently does nothing.
+        // max-uses of 0 would break every lance on the first swing.
         lanceMaxUses = atLeastOne("lance-max-uses", lanceMaxUses);
         lanceMaxUsesByMaterial.replaceAll(
                 (mat, uses) -> atLeastOne("lance-tiers." + mat + ".max-uses", uses));
 
-        // A negative strength inverts the knockback vector, pulling the target into the rider.
+        // negative strength would pull the target toward the rider instead of away
         knockbackStrength = nonNegative("knockback-strength", knockbackStrength);
 
         knockoffChanceZeroMomentum = clampPercent("knockoff-chance-zero-momentum", knockoffChanceZeroMomentum);
@@ -163,16 +161,12 @@ public final class JoustingConfig {
         highTierMaxDamage = nonNegative("high-tier-max-damage", highTierMaxDamage);
         finalDamageHardCap = nonNegative("final-damage-hard-cap", finalDamageHardCap);
 
-        // A negative run speed would build momentum while standing still, and a negative
-        // decay would grow momentum without bound instead of bleeding it off.
+        // negatives here would build momentum while standing still, or never let it bleed off
         minimumRunSpeed = nonNegative("minimum-run-speed", minimumRunSpeed);
         momentumDecayPerTick = nonNegative("momentum-decay-per-tick", momentumDecayPerTick);
 
         minimumMomentumDistance = nonNegative("minimum-momentum-distance", minimumMomentumDistance);
-        // Momentum is capped at full-momentum-distance, and no damage is dealt below
-        // minimum-momentum-distance. If full <= minimum the cap sits under the damage
-        // threshold, so every lance hit would silently deal zero damage forever. Coerce
-        // rather than only warn, so a typo can't disable the plugin.
+        // full must sit above minimum, or the momentum cap never reaches the damage threshold.
         if (fullMomentumDistance <= minimumMomentumDistance) {
             double corrected = minimumMomentumDistance + 1.0;
             plugin.getLogger().warning("full-momentum-distance (" + fullMomentumDistance

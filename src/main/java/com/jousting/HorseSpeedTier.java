@@ -63,13 +63,9 @@ public final class HorseSpeedTier {
     }
 
     /**
-     * Momentum fill fraction (0..1) along the damage ramp: 0 at or below
-     * {@code minDistance}, 1 at or above {@code fullDistance}.
-     *
-     * <p>The BossBar, the knockoff chance and the damage curve all read from this, so a
-     * bar at 0% means exactly "this hit deals no damage" rather than "the rider has not
-     * moved". Normalizing over {@code 0..fullDistance} instead would show a third of a
-     * bar at the point where hits are still cancelled for lack of momentum.
+     * Momentum fill fraction (0..1) along the damage ramp: 0 at or below {@code minDistance},
+     * 1 at or above {@code fullDistance}. The bar, the knockoff chance and the damage all use
+     * this, so an empty bar lines up with a zero-damage hit.
      */
     public static double momentumFraction(double momentum, double minDistance, double fullDistance) {
         if (momentum < minDistance) return 0.0;

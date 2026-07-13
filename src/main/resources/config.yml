@@ -89,5 +89,4 @@ sounds:
 
 # --- Debug ------------------------------------------------------
 # Message the attacker on each lance hit with damage (hearts), momentum %, and tiers.
-# Set false once you're done tuning.
-debug-damage: true
+debug-damage: false

@@ -8,6 +8,7 @@ import org.bukkit.entity.Horse;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
@@ -39,16 +40,13 @@ public class JoustingListener implements Listener {
         this.lances = lances;
     }
 
-    // ---------------------------------------------------------------- movement / momentum
+    // Momentum tracking and the bar itself live in MomentumTask (per-tick poll).
 
-    // Momentum tracking + the momentum bar are handled by MomentumTask (per-tick poll).
-
-    // ---------------------------------------------------------------- combat
-
-    @EventHandler(ignoreCancelled = true)
+    // HIGHEST so region/PvP protection plugins (WorldGuard etc.) cancel first; otherwise we'd
+    // burn a lance use and start the cooldown for a hit they then deny.
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
-        // Only direct melee strikes count as lance hits. Thorns and sweep damage also
-        // arrive here with the rider as damager and must not trigger a charge.
+        // Thorns and sweep damage also arrive as ENTITY_ATTACK from the rider; ignore them.
         if (event.getCause() != EntityDamageEvent.DamageCause.ENTITY_ATTACK) return;
         if (!(event.getDamager() instanceof Player damager)) return;
         if (!(damager.getVehicle() instanceof Horse horse)) return;
@@ -58,25 +56,18 @@ public class JoustingListener implements Listener {
         // Without jousting.use (default true) a lance is just an ordinary melee weapon.
         if (!damager.hasPermission("jousting.use")) return;
 
-        // Non-living targets (item frames, paintings, boats, minecarts, end crystals) are not
-        // jousting targets. Neither are armour stands, which are LivingEntity but would
-        // otherwise burn a lance use and start a cooldown when tapped. Leave them to vanilla.
+        // Armour stands are LivingEntity too but aren't jousting targets; leave them to vanilla.
         if (!(event.getEntity() instanceof LivingEntity victim)) return;
         if (victim instanceof ArmorStand) return;
 
-        // Below this point every early exit returns WITHOUT cancelling. Cancelling would strip
-        // the vanilla melee damage too, leaving the spear inert against everything for the
-        // whole cooldown; only the lance charge is suppressed, not the ordinary swing.
-
-        // Cooldown gate: no lance damage during cooldown.
+        // The early returns below don't cancel: the ordinary melee swing still lands, only the
+        // lance charge is withheld.
         if (cooldowns.isOnCooldown(damager.getUniqueId())) return;
 
         LanceTier tier = LanceTier.fromMaterial(mainHand.getType());
         int maxUses = config.getLanceMaxUses(mainHand.getType());
         int uses = lances.getUses(mainHand);
-
-        // Broken lance is decorative only: no charge damage, no cooldown.
-        if (uses >= maxUses) return;
+        if (uses >= maxUses) return; // broken lance: cosmetic only
 
         // --- damage calculation -------------------------------------------------
         double momentum = MomentumTracker.getMomentumDistance(damager.getUniqueId());
@@ -87,29 +78,21 @@ public class JoustingListener implements Listener {
                 config.getFullMomentumDistance(),
                 speedCap + config.getLanceDamageBonus(mainHand.getType()));
 
-        if (base <= 0) {
-            // Not enough momentum to land a charge; fall through to vanilla melee.
-            // No use consumed, no cooldown.
-            return;
-        }
+        if (base <= 0) return; // not enough momentum for a charge; ordinary swing still lands
 
-        // Lance damage depends ONLY on momentum, horse tier and lance tier.
-        // Sharpness and Strength are deliberately ignored so buffs can't inflate a charge.
+        // Sharpness/Strength are ignored on purpose so buffs can't inflate a charge.
         double damage = DamageCalculator.clamp(base, config.getFinalDamageHardCap());
 
-        // --- shield interaction -------------------------------------------------
         boolean blocked = victim instanceof Player vp && vp.isBlocking();
         if (blocked) {
             event.setCancelled(true); // shield absorbs; no health damage
             Player target = (Player) victim;
             EquipmentSlot hand = shieldHand(target);
-            if (hand != null) {
-                damageShield(target, hand);
-            }
+            boolean shieldBroke = hand != null && damageShield(target, hand);
             if (config.isShieldKnockbackOnBlock()) {
                 applyKnockback(damager, target);
             }
-            playSound(target, config.getShieldSound());
+            if (!shieldBroke) playSound(target, config.getShieldSound());
             consumeUse(mainHand, uses, tier, maxUses);
             if (config.isShieldCooldownOnBlock()) {
                 cooldowns.start(damager.getUniqueId(), config.getLanceCooldownMs());
@@ -119,10 +102,8 @@ public class JoustingListener implements Listener {
             return; // blocked hit deals no health damage
         }
 
-        // --- normal hit ---------------------------------------------------------
-        // Set the damage on THIS event instead of calling victim.damage(), which would
-        // re-fire EntityDamageByEntityEvent and recurse into this handler (StackOverflow).
-        // Config damage is in HEARTS; Minecraft damage is half-hearts (2 points = 1 heart).
+        // Set the damage on this event rather than calling victim.damage(), which would re-fire
+        // EntityDamageByEntityEvent and recurse. Config is in hearts; Minecraft uses half-hearts.
         event.setDamage(damage * 2.0);
         playSound(damager, config.getHitSound());
         applyKnockback(damager, victim);
@@ -148,15 +129,12 @@ public class JoustingListener implements Listener {
         barManager.update(damager, 0.0, tier);
     }
 
-    // ---------------------------------------------------------------- cleanup
-
     @EventHandler
     public void onVehicleExit(VehicleExitEvent event) {
         if (event.getExited() instanceof Player player) {
             MomentumTracker.resetMomentum(player.getUniqueId());
             barManager.remove(player.getUniqueId());
-            // Deliberately NOT clearing the cooldown: dismount/remount would reset it and
-            // bypass lance-cooldown-ms entirely. It expires on its own, and onQuit clears it.
+            // cooldown is left to expire, so remounting can't reset it
         }
     }
 
@@ -166,7 +144,6 @@ public class JoustingListener implements Listener {
         MomentumTracker.resetMomentum(player.getUniqueId());
         barManager.remove(player.getUniqueId());
         cooldowns.clear(player.getUniqueId());
-        // MomentumTask only sees online players, so it can't clean this up itself.
         plugin.getMomentumTask().forget(player.getUniqueId());
     }
 
@@ -187,17 +164,19 @@ public class JoustingListener implements Listener {
         return null;
     }
 
-    private void damageShield(Player target, EquipmentSlot hand) {
+    /** Damages the target's shield; returns true if it broke (and plays the break sound). */
+    private boolean damageShield(Player target, EquipmentSlot hand) {
         ItemStack shield = hand == EquipmentSlot.OFF_HAND
                 ? target.getInventory().getItemInOffHand()
                 : target.getInventory().getItemInMainHand();
-        if (shield == null) return;
+        if (shield == null) return false;
         ItemMeta meta = shield.getItemMeta();
-        if (!(meta instanceof Damageable dmg)) return;
+        if (!(meta instanceof Damageable dmg)) return false;
 
         int max = shield.getType().getMaxDurability();
         int newDamage = dmg.getDamage() + config.getShieldDurabilityDamage();
-        if (max > 0 && newDamage >= max) {
+        boolean broke = max > 0 && newDamage >= max;
+        if (broke) {
             shield.setAmount(0);
             playSound(target, config.getBreakSound());
         } else {
@@ -209,6 +188,7 @@ public class JoustingListener implements Listener {
         } else {
             target.getInventory().setItemInMainHand(shield);
         }
+        return broke;
     }
 
     private void applyKnockback(Player source, LivingEntity victim) {

@@ -55,18 +55,14 @@ class MomentumTrackerTest {
     }
 
     @Test
-    void fractionTracksTowardFullDistance() {
+    void fractionUsesTheDamageRamp() {
         UUID id = UUID.randomUUID();
         MomentumTracker.addDistance(id, 10.0);
-        // Halfway along the 5..15 damage ramp, not 10/15 of the raw distance.
+        // halfway up the 5..15 ramp, not 10/15 of raw distance
         assertEquals(0.5, MomentumTracker.getFraction(id, 5.0, 15.0), 1e-9);
-    }
+        MomentumTracker.resetMomentum(id);
 
-    @Test
-    void fractionIsZeroBelowTheDamageThreshold() {
-        UUID id = UUID.randomUUID();
         MomentumTracker.addDistance(id, 5.0);
-        // The bar must read empty exactly where calculateDamage still returns 0.
         assertEquals(0.0, MomentumTracker.getFraction(id, 5.0, 15.0), 1e-9);
     }
 

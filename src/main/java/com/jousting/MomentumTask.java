@@ -19,11 +19,7 @@ import java.util.UUID;
  * single laggy/turning tick won't wipe it.
  */
 public class MomentumTask extends BukkitRunnable {
-    /**
-     * No horse covers this many blocks in a single tick (the fastest tops out well under
-     * one). A larger jump is a position discontinuity — a same-world teleport — not a
-     * charge, and crediting it would fill the momentum bar instantly from a standstill.
-     */
+    // A move bigger than this in one tick is a teleport, not a horse; don't credit it as momentum.
     private static final double MAX_PLAUSIBLE_TICK_DISTANCE = 2.0;
 
     private final JoustingPlugin plugin;
@@ -64,9 +60,9 @@ public class MomentumTask extends BukkitRunnable {
             double min = config.getMinimumMomentumDistance();
 
             if (moved >= config.getMinimumRunSpeed()) {
-                MomentumTracker.addDistanceCapped(id, moved, full); // grow, capped at "full"
+                MomentumTracker.addDistanceCapped(id, moved, full);
             } else {
-                MomentumTracker.decay(id, config.getMomentumDecayPerTick()); // bleed down when slow
+                MomentumTracker.decay(id, config.getMomentumDecayPerTick());
             }
 
             barManager.update(player, MomentumTracker.getFraction(id, min, full), tier);
